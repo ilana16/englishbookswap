@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "rules": {
+      "books": {
+        ".read": true,
+        ".write": "auth != null"
+      },
+      "wanted_books": {
+        ".read": true,
+        ".write": "auth != null"
+      },
+      "profiles": {
+        ".read": true,
+        ".write": "auth != null"
+      },
+      "chats": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      "messages": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    }
+  },
+  "storage": {
+    "rules": "service firebase.storage { match /b/{bucket}/o { match /{allPaths=**} { allow read; allow write: if request.auth != null; } } }"
+  }
+}

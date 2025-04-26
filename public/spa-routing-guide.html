@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPA Routing Configuration</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #2c3e50;
+    }
+    pre {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+    }
+    .note {
+      background-color: #e7f5fe;
+      border-left: 4px solid #2196f3;
+      padding: 15px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>SPA Routing Configuration Guide</h1>
+  
+  <p>This guide explains how to configure your hosting provider to properly handle Single Page Application (SPA) routing.</p>
+  
+  <h2>The Problem</h2>
+  <p>When you access direct URLs like <code>/add?type=want</code> in a Single Page Application, the server looks for actual files at those paths rather than letting the client-side router handle them. This results in 404 errors.</p>
+  
+  <h2>Solution Options</h2>
+  
+  <h3>Option 1: _redirects file (Netlify, Vercel, etc.)</h3>
+  <pre>/* /index.html 200</pre>
+  <p>Place this file in your project's <code>public</code> directory.</p>
+  
+  <h3>Option 2: netlify.toml configuration</h3>
+  <pre>[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200</pre>
+  <p>Place this file in your project's root directory.</p>
+  
+  <h3>Option 3: Firebase Hosting configuration (firebase.json)</h3>
+  <pre>{
+  "hosting": {
+    "public": "dist",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}</pre>
+  
+  <h3>Option 4: Vercel configuration (vercel.json)</h3>
+  <pre>{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}</pre>
+  
+  <div class="note">
+    <p><strong>Note:</strong> After adding any of these configurations, you need to rebuild and redeploy your application for the changes to take effect.</p>
+  </div>
+  
+  <h2>Deployment Instructions</h2>
+  <ol>
+    <li>Add the appropriate configuration file to your project</li>
+    <li>Rebuild your application: <code>npm run build</code></li>
+    <li>Deploy the updated build to your hosting provider</li>
+  </ol>
+  
+  <p>Once deployed, direct URL access should work correctly, allowing your React Router to handle the routing client-side.</p>
+</body>
+</html>

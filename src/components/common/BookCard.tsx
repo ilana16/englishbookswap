@@ -16,6 +16,7 @@ export interface Book {
     neighborhood: string;
   };
   google_books_id?: string;
+  genres?: string[];
 }
 
 interface BookCardProps {

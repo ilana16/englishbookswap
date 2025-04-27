@@ -84,6 +84,7 @@ const AddBook = () => {
         condition: formData.condition,
         neighborhood: formData.neighborhood,
         google_books_id: selectedBook.id,
+        genres: selectedBook.volumeInfo.categories || [],
       };
 
       console.log(`Submitting book data as ${bookType} book:`, bookData);

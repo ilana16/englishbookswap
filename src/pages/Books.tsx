@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { BookList } from "@/components/common/BookList";
 import { NeighborhoodFilter } from "@/components/common/NeighborhoodFilter";
+import { GenreFilter } from "@/components/common/GenreFilter";
 import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,13 +12,16 @@ import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { Book } from "@/components/common/BookCard";
 import { COLLECTIONS } from "@/integrations/firebase/types";
+import { getBookById } from "@/services/googleBooks";
 
 const Books = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+  const [availableGenres, setAvailableGenres] = useState<string[]>([]);
 
   const { data: books = [], isLoading, error } = useQuery<Book[]>({
-    queryKey: ['books', searchTerm, selectedNeighborhoods],
+    queryKey: ['books', searchTerm, selectedNeighborhoods, selectedGenres],
     queryFn: async () => {
       // Create a reference to the books collection
       const booksRef = collection(db, COLLECTIONS.BOOKS);
@@ -36,7 +40,9 @@ const Books = () => {
           coverColor: data.cover_color,
           description: data.description || "",
           condition: data.condition,
-          owner: data.owner as { name: string; neighborhood: string }
+          owner: data.owner as { name: string; neighborhood: string },
+          google_books_id: data.google_books_id,
+          genres: data.genres || []
         };
       });
       
@@ -58,6 +64,24 @@ const Books = () => {
           selectedNeighborhoods.includes(book.owner.neighborhood)
         );
       }
+      
+      // Apply genre filtering client-side if needed
+      if (selectedGenres.length > 0) {
+        filteredBooks = filteredBooks.filter(book => 
+          book.genres && book.genres.some(genre => selectedGenres.includes(genre))
+        );
+      }
+      
+      // Extract all unique genres from books for the filter
+      const allGenres = new Set<string>();
+      booksData.forEach(book => {
+        if (book.genres && book.genres.length > 0) {
+          book.genres.forEach(genre => allGenres.add(genre));
+        }
+      });
+      
+      // Update available genres state
+      setAvailableGenres(Array.from(allGenres).sort());
       
       console.log("Fetched books:", filteredBooks.length);
       return filteredBooks;
@@ -115,10 +139,19 @@ const Books = () => {
               </div>
             </div>
             <div className="col-span-1">
-              <NeighborhoodFilter
-                selectedNeighborhoods={selectedNeighborhoods}
-                onChange={setSelectedNeighborhoods}
-              />
+              <div className="space-y-4">
+                <NeighborhoodFilter
+                  selectedNeighborhoods={selectedNeighborhoods}
+                  onChange={setSelectedNeighborhoods}
+                />
+                {availableGenres.length > 0 && (
+                  <GenreFilter
+                    selectedGenres={selectedGenres}
+                    onChange={setSelectedGenres}
+                    availableGenres={availableGenres}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>

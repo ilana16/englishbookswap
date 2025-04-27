@@ -9,6 +9,7 @@ import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { useState, useEffect } from "react";
+import { HowToUseGuide } from "@/components/home/HowToUseGuide";
 
 const Index = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -228,6 +229,9 @@ const Index = () => {
         
         <BookList books={featuredBooks} />
       </div>
+
+      {/* How to Use Guide Section */}
+      <HowToUseGuide />
 
       <div className="bg-white py-12 md:py-16 border-y border-border">
         <div className="page-container">

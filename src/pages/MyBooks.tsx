@@ -7,6 +7,9 @@ import { COLLECTIONS } from "@/integrations/firebase/types";
 import { Book } from "@/components/common/BookCard";
 import { MyBooksList } from "@/components/common/MyBooksList";
 import { getBooksByUser, getWantedBooksByUser } from "@/integrations/firebase/client";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+import { PlusCircle } from "lucide-react";
 
 export default function MyBooks() {
   const { user } = useAuth();
@@ -107,7 +110,15 @@ export default function MyBooks() {
   return (
     <Layout>
       <div className="page-container">
-        <h1 className="text-3xl font-bold mb-8">My Books</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">My Books</h1>
+          <Button asChild className="bg-bookswap-darkblue hover:bg-bookswap-darkblue/90">
+            <Link to="/add" className="flex items-center">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add a Book
+            </Link>
+          </Button>
+        </div>
         {isLoading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-bookswap-darkblue mx-auto mb-4"></div>

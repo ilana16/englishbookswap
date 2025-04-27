@@ -125,38 +125,40 @@ const AddBook = () => {
       <div className="page-container max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-4">Add Your Book</h1>
         
-        {/* Book Type Selection Dropdown */}
+        {/* Book Type Selection */}
         <div className="mb-8 bg-muted/30 p-4 rounded-lg border">
-          <div className="space-y-2">
-            <Label htmlFor="bookType" className="text-lg font-medium">What would you like to do?</Label>
-            <Select
-              value={bookType}
-              onValueChange={(value) => setBookType(value as "have" | "want")}
-            >
-              <SelectTrigger id="bookType" className="w-full">
-                <SelectValue placeholder="Select an option" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="have" className="flex items-center">
-                  <div className="flex items-center">
-                    <BookOpen className="mr-2 h-5 w-5 text-primary" />
-                    <span>I have it</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="want" className="flex items-center">
-                  <div className="flex items-center">
-                    <BookPlus className="mr-2 h-5 w-5 text-primary" />
-                    <span>I want it</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground mt-1">
-              {bookType === "have" 
-                ? "Add a book to your collection that you're willing to swap with others" 
-                : "Add a book to your wishlist that you're looking to acquire"}
-            </p>
-          </div>
+          <Label className="text-lg font-medium mb-3 block">What would you like to do?</Label>
+          <RadioGroup 
+            value={bookType} 
+            onValueChange={(value) => setBookType(value as "have" | "want")}
+            className="flex flex-col sm:flex-row gap-4"
+          >
+            <div className={`flex items-start space-x-2 border rounded-lg p-3 ${bookType === "have" ? "bg-primary/10 border-primary" : "bg-white"}`}>
+              <RadioGroupItem value="have" id="have" className="mt-1" />
+              <div className="flex-1">
+                <Label htmlFor="have" className="text-base font-medium flex items-center">
+                  <BookOpen className="mr-2 h-5 w-5 text-primary" />
+                  Add a book I have
+                </Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add a book to your collection that you're willing to swap with others
+                </p>
+              </div>
+            </div>
+            
+            <div className={`flex items-start space-x-2 border rounded-lg p-3 ${bookType === "want" ? "bg-primary/10 border-primary" : "bg-white"}`}>
+              <RadioGroupItem value="want" id="want" className="mt-1" />
+              <div className="flex-1">
+                <Label htmlFor="want" className="text-base font-medium flex items-center">
+                  <BookPlus className="mr-2 h-5 w-5 text-primary" />
+                  Add a book I want
+                </Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Add a book to your wishlist that you're looking to acquire
+                </p>
+              </div>
+            </div>
+          </RadioGroup>
         </div>
         
         <div className="bg-white border border-border rounded-lg p-6 md:p-8">

@@ -140,10 +140,6 @@ const Books = () => {
             </div>
             <div className="col-span-1">
               <div className="space-y-4">
-                <NeighborhoodFilter
-                  selectedNeighborhoods={selectedNeighborhoods}
-                  onChange={setSelectedNeighborhoods}
-                />
                 {availableGenres.length > 0 && (
                   <GenreFilter
                     selectedGenres={selectedGenres}
@@ -151,6 +147,10 @@ const Books = () => {
                     availableGenres={availableGenres}
                   />
                 )}
+                <NeighborhoodFilter
+                  selectedNeighborhoods={selectedNeighborhoods}
+                  onChange={setSelectedNeighborhoods}
+                />
               </div>
             </div>
           </div>

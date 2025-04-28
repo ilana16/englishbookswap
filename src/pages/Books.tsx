@@ -190,18 +190,22 @@ const Books = () => {
               </div>
             </div>
             <div className="col-span-1">
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {availableGenres.length > 0 && (
-                  <GenreFilter
-                    selectedGenres={selectedGenres}
-                    onChange={setSelectedGenres}
-                    availableGenres={availableGenres}
-                  />
+                  <div>
+                    <GenreFilter
+                      selectedGenres={selectedGenres}
+                      onChange={setSelectedGenres}
+                      availableGenres={availableGenres}
+                    />
+                  </div>
                 )}
-                <NeighborhoodFilter
-                  selectedNeighborhoods={selectedNeighborhoods}
-                  onChange={setSelectedNeighborhoods}
-                />
+                <div>
+                  <NeighborhoodFilter
+                    selectedNeighborhoods={selectedNeighborhoods}
+                    onChange={setSelectedNeighborhoods}
+                  />
+                </div>
               </div>
             </div>
           </div>

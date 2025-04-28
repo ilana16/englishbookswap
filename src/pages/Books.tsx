@@ -209,12 +209,12 @@ const Books = () => {
 
         <div className="mb-4">
           <p className="text-sm text-muted-foreground">
-            Showing {books.length} books
+            Showing {filteredBooks.length} books
           </p>
         </div>
 
         <BookList 
-          books={books} 
+          books={filteredBooks} 
           emptyMessage="No books match your search criteria. Try adjusting your filters or add your own books to share!"
         />
       </div>

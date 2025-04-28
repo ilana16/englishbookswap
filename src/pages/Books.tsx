@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { BookList } from "@/components/common/BookList";
 import { NeighborhoodFilter } from "@/components/common/NeighborhoodFilter";
 import { GenreFilter } from "@/components/common/GenreFilter";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -16,21 +16,17 @@ import { getBookById } from "@/services/googleBooks";
 
 const Books = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [dropdownResults, setDropdownResults] = useState<Book[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [availableGenres, setAvailableGenres] = useState<string[]>([]);
 
-  const { data: books = [], isLoading, error } = useQuery<Book[]>({
-    queryKey: ['books', searchTerm, selectedNeighborhoods, selectedGenres],
+  const { data: allBooks = [], isLoading, error } = useQuery<Book[]>({
+    queryKey: ["allBooks"], // Fetch all books once
     queryFn: async () => {
-      // Create a reference to the books collection
       const booksRef = collection(db, COLLECTIONS.BOOKS);
-      
-      // For Firebase, we'll fetch all books and filter client-side
-      // since Firestore doesn't support complex text search like Supabase
       const querySnapshot = await getDocs(booksRef);
-      
-      // Map database results to our Book type
       const booksData = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
@@ -46,32 +42,6 @@ const Books = () => {
         };
       });
       
-      // Apply search filtering client-side
-      let filteredBooks = booksData;
-      
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        filteredBooks = filteredBooks.filter(book => 
-          book.title.toLowerCase().includes(term) || 
-          book.author.toLowerCase().includes(term) || 
-          (book.description && book.description.toLowerCase().includes(term))
-        );
-      }
-      
-      // Apply neighborhood filtering client-side if needed
-      if (selectedNeighborhoods.length > 0) {
-        filteredBooks = filteredBooks.filter(book => 
-          selectedNeighborhoods.includes(book.owner.neighborhood)
-        );
-      }
-      
-      // Apply genre filtering client-side if needed
-      if (selectedGenres.length > 0) {
-        filteredBooks = filteredBooks.filter(book => 
-          book.genres && book.genres.some(genre => selectedGenres.includes(genre))
-        );
-      }
-      
       // Extract all unique genres from books for the filter
       const allGenres = new Set<string>();
       booksData.forEach(book => {
@@ -79,14 +49,64 @@ const Books = () => {
           book.genres.forEach(genre => allGenres.add(genre));
         }
       });
-      
-      // Update available genres state
       setAvailableGenres(Array.from(allGenres).sort());
       
-      console.log("Fetched books:", filteredBooks.length);
-      return filteredBooks;
+      return booksData;
     }
   });
+
+  // Filter books based on search term, neighborhood, and genre
+  const filteredBooks = useMemo(() => {
+    let booksToFilter = allBooks;
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      booksToFilter = booksToFilter.filter(book => 
+        book.title.toLowerCase().includes(term) || 
+        book.author.toLowerCase().includes(term) || 
+        (book.description && book.description.toLowerCase().includes(term))
+      );
+    }
+
+    if (selectedNeighborhoods.length > 0) {
+      booksToFilter = booksToFilter.filter(book => 
+        selectedNeighborhoods.includes(book.owner.neighborhood)
+      );
+    }
+
+    if (selectedGenres.length > 0) {
+      booksToFilter = booksToFilter.filter(book => 
+        book.genres && book.genres.some(genre => selectedGenres.includes(genre))
+      );
+    }
+
+    return booksToFilter;
+  }, [allBooks, searchTerm, selectedNeighborhoods, selectedGenres]);
+
+  // Update dropdown results when search term changes
+  useEffect(() => {
+    if (searchTerm.trim().length > 1) {
+      const term = searchTerm.toLowerCase();
+      const results = allBooks.filter(book => 
+        book.title.toLowerCase().includes(term) || 
+        book.author.toLowerCase().includes(term)
+      ).slice(0, 5); // Limit dropdown results
+      setDropdownResults(results);
+      setShowSearchResults(results.length > 0);
+    } else {
+      setDropdownResults([]);
+      setShowSearchResults(false);
+    }
+  }, [searchTerm, allBooks]);
+
+  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleDropdownSelect = (book: Book) => {
+    setSearchTerm(book.title); // Set search term to selected book title
+    setShowSearchResults(false);
+  };
 
   if (isLoading) {
     return (
@@ -133,9 +153,40 @@ const Books = () => {
                 <Input
                   placeholder="Search by title, author, or description..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={handleSearchInputChange}
                   className="pl-10"
                 />
+                
+                {/* Interactive Search Results Dropdown */}
+                {showSearchResults && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-border rounded-md shadow-lg max-h-80 overflow-y-auto">
+                    <div className="p-2">
+                      {dropdownResults.map((book) => (
+                        <div
+                          key={book.id}
+                          className="p-3 hover:bg-gray-50 cursor-pointer flex items-start gap-3 border-b border-border last:border-0"
+                          onClick={() => handleDropdownSelect(book)}
+                        >
+                          <div 
+                            className="w-10 h-14 flex-shrink-0 rounded"
+                            style={{ backgroundColor: book.coverColor || '#436B95' }}
+                          />
+                          <div className="flex-1">
+                            <h3 className="font-medium text-sm">{book.title}</h3>
+                            <p className="text-xs text-muted-foreground">
+                              by {book.author}
+                            </p>
+                            {book.condition && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Condition: {book.condition}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="col-span-1">

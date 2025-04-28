@@ -25,7 +25,9 @@ export default function Auth() {
         navigate("/");
       } else {
         await signUp(email, password);
-        toast.success("Check your email to confirm your account!");
+        // Automatically signed in by Firebase, redirect to My Books
+        navigate("/my-books"); 
+        toast.success("Account created successfully!");
       }
     } catch (error: any) {
       toast.error(error.message);

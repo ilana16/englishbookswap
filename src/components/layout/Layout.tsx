@@ -24,7 +24,7 @@ export function Layout({ children, hideHeader }: LayoutProps) {
       {!shouldHideHeader && <Header />}
       <main className="flex-grow pb-16">{children}</main>
       <Footer />
-      {isMobile && <BottomNavigation />}
+      <BottomNavigation />
     </div>
   );
 }

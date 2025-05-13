@@ -17,7 +17,9 @@ export interface Book {
   owner: Json;
   title: string;
   updated_at: string;
-  book_type?: 'have' | 'want'; // New field to distinguish between books user has and wants
+  book_type?: 'have' | 'want';
+  neighborhood: string; // Added to ensure all books have a neighborhood
+  genres?: string[]; // Added for consistency
 }
 
 export interface WantedBook {
@@ -29,6 +31,9 @@ export interface WantedBook {
   user_id: string;
   title: string;
   updated_at: string;
+  condition: string; // Added for "no preference" (stores "any") or specific condition
+  neighborhood: string; // Added to ensure all wanted books have a neighborhood (user's default)
+  genres?: string[]; // Added for consistency
 }
 
 export interface Chat {
@@ -58,7 +63,7 @@ export interface Profile {
   created_at: string;
   display_name: string | null;
   id: string;
-  neighborhood: string | null;
+  neighborhood: string | null; // This is the default neighborhood
   updated_at: string;
   username: string | null;
 }
@@ -66,8 +71,9 @@ export interface Profile {
 // Firebase collection names
 export const COLLECTIONS = {
   BOOKS: 'books',
-  WANTED_BOOKS: 'wanted_books', // New collection for books users want
+  WANTED_BOOKS: 'wanted_books',
   CHATS: 'chats',
   MESSAGES: 'messages',
   PROFILES: 'profiles'
 } as const;
+

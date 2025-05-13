@@ -9,11 +9,14 @@ import { toast } from "sonner";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Search, Loader2, BookOpen, BookPlus } from "lucide-react";
 import { GoogleBook, searchBooks } from "@/services/googleBooks";
-import { jerusalemNeighborhoods } from "@/data/jerusalemNeighborhoods";
 import { addBook, addWantedBook } from "@/integrations/firebase/client";
 import { useAuth } from "@/components/AuthProvider";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/integrations/firebase/config";
+import { COLLECTIONS } from "@/integrations/firebase/types";
 
-const conditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
+const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
+const noPreferenceCondition = "No Preference";
 
 const AddBook = () => {
   const navigate = useNavigate();
@@ -25,17 +28,60 @@ const AddBook = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookType, setBookType] = useState<"have" | "want">("have");
+  const [userNeighborhood, setUserNeighborhood] = useState<string>("");
   const [formData, setFormData] = useState({
     condition: "",
-    neighborhood: "",
   });
+  const [currentConditions, setCurrentConditions] = useState<string[]>(baseConditions);
+
+  useEffect(() => {
+    if (bookType === "want") {
+      setCurrentConditions([...baseConditions, noPreferenceCondition]);
+    } else {
+      setCurrentConditions(baseConditions);
+      // If switching from 'want' to 'have' and 'No Preference' was selected, reset condition
+      if (formData.condition === noPreferenceCondition) {
+        setFormData(prev => ({ ...prev, condition: "" }));
+      }
+    }
+  }, [bookType, formData.condition]);
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    async function fetchProfileNeighborhood() {
+      try {
+        const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const profileData = profileSnap.data();
+          if (profileData.neighborhood) {
+            setUserNeighborhood(profileData.neighborhood);
+          } else {
+            toast.error("Please set your default neighborhood in your profile first.");
+            navigate("/profile");
+          }
+        } else {
+          toast.error("Profile not found. Please complete your profile.");
+          navigate("/profile");
+        }
+      } catch (error) {
+        toast.error("Error fetching your neighborhood from profile.");
+        console.error("Error fetching profile neighborhood:", error);
+      }
+    }
+
+    fetchProfileNeighborhood();
+  }, [user, navigate]);
   
-  // Check URL parameters for initial book type
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const typeParam = params.get('type');
-    if (typeParam === 'want') {
-      setBookType('want');
+    const typeParam = params.get("type");
+    if (typeParam === "want") {
+      setBookType("want");
     }
   }, [location]);
 
@@ -46,9 +92,8 @@ const AddBook = () => {
     try {
       const results = await searchBooks(searchQuery);
       setSearchResults(results);
-      console.log('Search results:', results);
     } catch (error) {
-      console.error('Search error:', error);
+      console.error("Search error:", error);
       toast.error("Error searching for books");
     } finally {
       setIsSearching(false);
@@ -56,7 +101,6 @@ const AddBook = () => {
   };
 
   const handleBookSelect = (book: GoogleBook) => {
-    console.log('Selected book:', book);
     setSelectedBook(book);
     setSearchResults([]);
     setSearchQuery("");
@@ -64,58 +108,71 @@ const AddBook = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBook || !formData.condition || !formData.neighborhood || !user) {
-      toast.error("Please fill in all required fields");
+    let conditionToSave = formData.condition;
+    if (bookType === "want" && formData.condition === noPreferenceCondition) {
+      conditionToSave = "any";
+    }
+
+    if (!selectedBook || !conditionToSave || !user || !userNeighborhood) {
+      if (!userNeighborhood) {
+        toast.error("Your default neighborhood is not set. Please update your profile.");
+      } else if (!conditionToSave) {
+        toast.error("Please select a book condition.");
+      } else {
+        toast.error("Please fill in all required fields and ensure your neighborhood is set in your profile.");
+      }
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Generate a color from the book ID if we have one, otherwise use default
       const coverColor = selectedBook.volumeInfo.imageLinks?.thumbnail 
-        ? '#' + selectedBook.id.slice(0, 6) 
-        : '#436B95';
+        ? "#" + selectedBook.id.slice(0, 6) 
+        : "#436B95";
         
       const bookData = {
         title: selectedBook.volumeInfo.title,
         author: selectedBook.volumeInfo.authors?.[0] || "Unknown Author",
         description: selectedBook.volumeInfo.description || "",
         cover_color: coverColor,
-        condition: formData.condition,
-        neighborhood: formData.neighborhood,
+        condition: conditionToSave, // Use modified condition
+        neighborhood: userNeighborhood,
         google_books_id: selectedBook.id,
         genres: selectedBook.volumeInfo.categories || [],
       };
 
-      console.log(`Submitting book data as ${bookType} book:`, bookData);
-      
       if (bookType === "have") {
-        // Add to books the user has
         const bookWithOwner = {
           ...bookData,
           owner: {
             id: user.uid,
             name: user.email || user.displayName || "Anonymous",
-            neighborhood: formData.neighborhood
+            neighborhood: userNeighborhood
           }
         };
         await addBook(bookWithOwner);
         toast.success("Book added to your collection!");
       } else {
-        // Add to books the user wants
-        const wantedBook = {
-          ...bookData,
-          user_id: user.uid
+        const wantedBookData = {
+            title: selectedBook.volumeInfo.title,
+            author: selectedBook.volumeInfo.authors?.[0] || "Unknown Author",
+            description: selectedBook.volumeInfo.description || "",
+            google_books_id: selectedBook.id,
+            user_id: user.uid,
+            condition: conditionToSave, // Use modified condition for wanted book
+            neighborhood: userNeighborhood,
+            genres: selectedBook.volumeInfo.categories || [],
+            // cover_color is not in WantedBook interface in types.ts, but it was in bookData. 
+            // For now, I will not include it, but this might need to be revisited if it's an oversight.
         };
-        await addWantedBook(wantedBook);
+        await addWantedBook(wantedBookData);
         toast.success("Book added to your want list!");
       }
 
-      console.log('Book added successfully');
       navigate("/my-books");
     } catch (error: any) {
-      console.error('Submission error:', error);
-      toast.error(`Error adding book: ${error.message || 'Unknown error'}`);
+      console.error("Submission error:", error);
+      toast.error(`Error adding book: ${error.message || "Unknown error"}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -126,12 +183,17 @@ const AddBook = () => {
       <div className="page-container max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold mb-4">Add Your Book</h1>
         
-        {/* Book Type Selection */}
         <div className="mb-8 bg-muted/30 p-4 rounded-lg border">
           <Label className="text-lg font-medium mb-3 block">What would you like to do?</Label>
           <RadioGroup 
             value={bookType} 
-            onValueChange={(value) => setBookType(value as "have" | "want")}
+            onValueChange={(value) => {
+              setBookType(value as "have" | "want");
+              // Reset condition if switching types and current condition is not valid for new type
+              if (value === "have" && formData.condition === noPreferenceCondition) {
+                setFormData(prev => ({ ...prev, condition: ""}));
+              }
+            }}
             className="flex flex-col sm:flex-row gap-4"
           >
             <div className={`flex items-start space-x-2 border rounded-lg p-3 ${bookType === "have" ? "bg-primary/10 border-primary" : "bg-white"}`}>
@@ -142,7 +204,7 @@ const AddBook = () => {
                   Add a book I have
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Add a book to your collection that you're willing to swap with others
+                  Add a book to your collection that you are willing to swap with others
                 </p>
               </div>
             </div>
@@ -155,7 +217,7 @@ const AddBook = () => {
                   Add a book I want
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Add a book to your wishlist that you're looking to acquire
+                  Add a book to your wishlist that you are looking to acquire
                 </p>
               </div>
             </div>
@@ -165,7 +227,6 @@ const AddBook = () => {
         <div className="bg-white border border-border rounded-lg p-6 md:p-8">
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
-              {/* Book Search Section */}
               <div className="space-y-4">
                 <Label>Search for your book</Label>
                 <div className="flex gap-2">
@@ -189,7 +250,6 @@ const AddBook = () => {
                   </Button>
                 </div>
 
-                {/* Search Results */}
                 {searchResults.length > 0 && (
                   <div className="mt-4 border rounded-md divide-y">
                     {searchResults.map((book) => (
@@ -223,7 +283,6 @@ const AddBook = () => {
                   </div>
                 )}
 
-                {/* Selected Book Display */}
                 {selectedBook && (
                   <div className="mt-4 p-4 border rounded-md bg-muted/20">
                     <div className="flex items-start gap-4">
@@ -260,8 +319,7 @@ const AddBook = () => {
                 )}
               </div>
 
-              {/* Book Details Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="condition">Condition *</Label>
                   <Select
@@ -272,7 +330,7 @@ const AddBook = () => {
                       <SelectValue placeholder="Select condition" />
                     </SelectTrigger>
                     <SelectContent>
-                      {conditions.map(condition => (
+                      {currentConditions.map(condition => (
                         <SelectItem key={condition} value={condition}>
                           {condition}
                         </SelectItem>
@@ -281,31 +339,19 @@ const AddBook = () => {
                   </Select>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="neighborhood">Your Neighborhood *</Label>
-                  <Select
-                    value={formData.neighborhood}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, neighborhood: value }))}
-                  >
-                    <SelectTrigger id="neighborhood">
-                      <SelectValue placeholder="Select neighborhood" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {jerusalemNeighborhoods.map(neighborhood => (
-                        <SelectItem key={neighborhood} value={neighborhood}>
-                          {neighborhood}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {userNeighborhood && (
+                    <div>
+                        <Label className="block text-sm font-medium mb-1">Your Default Neighborhood (from profile)</Label>
+                        <p className="text-md p-2 border rounded-md bg-muted/50">{userNeighborhood}</p>
+                    </div>
+                )}
               </div>
               
           <div className="pt-4">
                 <Button 
                   type="submit" 
                   className="w-full"
-                  disabled={!selectedBook || !formData.condition || !formData.neighborhood || isSubmitting}
+                  disabled={!selectedBook || !formData.condition || !userNeighborhood || isSubmitting}
                 >
                   {isSubmitting ? (
                     <>
@@ -331,3 +377,4 @@ const AddBook = () => {
 };
 
 export default AddBook;
+

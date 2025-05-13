@@ -7,8 +7,8 @@ import { MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
-import { COLLECTIONS } from "@/integrations/firebase/types";
-import { getCurrentUser, getBooksByUser, getWantedBooksByUser } from "@/integrations/firebase/client";
+import { COLLECTIONS, WantedBook as WantedBookType, Book as BookType } from "@/integrations/firebase/types"; // Import full types
+import { getBooksByUser, getWantedBooksByUser } from "@/integrations/firebase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -17,8 +17,8 @@ interface MatchGroup {
     id: string;
     name: string;
     neighborhood: string;
-    booksOffered: Book[];
-    booksWanted: Book[];
+    booksOffered: Book[]; // This Book is the local display Book type
+    booksWanted: Book[];  // This Book is the local display Book type
   };
   matchScore: number;
 }
@@ -27,26 +27,26 @@ const Matches = () => {
   const { user } = useAuth();
   
   const { data: matches = [], isLoading, error } = useQuery<MatchGroup[]>({
-    queryKey: ['matches'],
+    queryKey: ["matches", user?.uid], // Add user.uid to queryKey for re-fetching on user change
     queryFn: async () => {
       if (!user) throw new Error("Not authenticated");
       
       const userId = user.uid;
 
       // Get current user's books (books they have)
-      const currentUserBooks = await getBooksByUser(userId);
+      const currentUserBooks: BookType[] = await getBooksByUser(userId);
       
       // Get current user's wanted books (books they want)
-      const currentUserWantedBooks = await getWantedBooksByUser(userId);
+      const currentUserWantedBooks: WantedBookType[] = await getWantedBooksByUser(userId);
 
       // Get all other users' books
       const booksRef = collection(db, COLLECTIONS.BOOKS);
       const otherBooksQuery = query(booksRef, where("owner.id", "!=", userId));
       const otherBooksSnapshot = await getDocs(otherBooksQuery);
       
-      const otherUsersBooks = otherBooksSnapshot.docs.map(doc => ({
+      const otherUsersBooks: BookType[] = otherBooksSnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...(doc.data() as Omit<BookType, "id">)
       }));
 
       // Get all other users' wanted books
@@ -54,178 +54,176 @@ const Matches = () => {
       const otherWantedBooksQuery = query(wantedBooksRef, where("user_id", "!=", userId));
       const otherWantedBooksSnapshot = await getDocs(otherWantedBooksQuery);
       
-      const otherUsersWantedBooks = otherWantedBooksSnapshot.docs.map(doc => ({
+      const otherUsersWantedBooks: WantedBookType[] = otherWantedBooksSnapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...(doc.data() as Omit<WantedBookType, "id">)
       }));
 
       // Group books by owner
-      const booksByOwner = otherUsersBooks.reduce((acc, book) => {
-        const ownerId = book.owner.id;
-        if (!acc[ownerId]) {
-          acc[ownerId] = {
+      const booksByOwner: { 
+        [key: string]: { 
+          id: string; 
+          name: string; 
+          neighborhood: string; 
+          books: BookType[]; 
+          wantedBooks: WantedBookType[]; 
+        }
+      } = {};
+
+      otherUsersBooks.forEach(book => {
+        const ownerId = book.owner.id as string; // Assuming owner.id is always present and string
+        if (!booksByOwner[ownerId]) {
+          booksByOwner[ownerId] = {
             id: ownerId,
-            name: book.owner.name || 'Unknown User',
-            neighborhood: book.owner.neighborhood || 'Unknown',
+            name: (book.owner.name as string) || "Unknown User",
+            neighborhood: (book.owner.neighborhood as string) || "Unknown",
             books: [],
             wantedBooks: []
           };
         }
-        acc[ownerId].books.push(book);
-        return acc;
-      }, {});
+        booksByOwner[ownerId].books.push(book);
+      });
 
       // Group wanted books by user
       otherUsersWantedBooks.forEach(wantedBook => {
         const ownerId = wantedBook.user_id;
         if (booksByOwner[ownerId]) {
-          if (!booksByOwner[ownerId].wantedBooks) {
-            booksByOwner[ownerId].wantedBooks = [];
-          }
           booksByOwner[ownerId].wantedBooks.push(wantedBook);
+        } else {
+          // If user only has wanted books and no books for swap, they might not be in booksByOwner yet
+          // This case might need handling if we want to show users who only want books from current user
+          // For now, we only match with users who also offer books.
         }
       });
 
-      // Generate matches based on explicit wants and haves
-      const matches: MatchGroup[] = [];
+      const generatedMatches: MatchGroup[] = [];
       
       for (const ownerId in booksByOwner) {
         const ownerInfo = booksByOwner[ownerId];
-        const ownerBooks = ownerInfo.books;
-        const ownerWantedBooks = ownerInfo.wantedBooks || [];
+        const ownerBooks = ownerInfo.books; // These are BookType
+        const ownerWantedBooks = ownerInfo.wantedBooks || []; // These are WantedBookType
         
-        const booksOffered = [];
-        const booksWanted = [];
+        const booksOfferedToCurrentUser: Book[] = []; // For display
+        const booksWantedByCurrentUser: Book[] = []; // For display (these are current user's books that other user wants)
         let matchScore = 0;
         
         // Find books that the other user has that the current user wants
-        for (const ownerBook of ownerBooks) {
-          // Convert to Book type for display
+        for (const ownerBook of ownerBooks) { // ownerBook is BookType
+          const isExplicitlyWanted = currentUserWantedBooks.some(
+            wantedBook => // wantedBook is WantedBookType
+              wantedBook.title.toLowerCase() === ownerBook.title.toLowerCase() &&
+              wantedBook.author.toLowerCase() === ownerBook.author.toLowerCase() &&
+              (wantedBook.condition === "any" || wantedBook.condition === ownerBook.condition)
+          );
+          
           const bookForDisplay: Book = {
             id: ownerBook.id,
             title: ownerBook.title,
             author: ownerBook.author,
-            coverColor: ownerBook.cover_color || '#436B95',
+            coverColor: ownerBook.cover_color || "#436B95",
             description: ownerBook.description || "",
             condition: ownerBook.condition,
             owner: {
-              name: ownerBook.owner.name,
-              neighborhood: ownerBook.owner.neighborhood
+              name: ownerInfo.name, // Other user's name
+              neighborhood: ownerInfo.neighborhood // Other user's neighborhood
             }
           };
-          
-          // Check if this book matches any of the current user's wanted books
-          const isExplicitlyWanted = currentUserWantedBooks.some(
-            wantedBook => 
-              wantedBook.title.toLowerCase() === ownerBook.title.toLowerCase() &&
-              wantedBook.author.toLowerCase() === ownerBook.author.toLowerCase()
-          );
-          
+
           if (isExplicitlyWanted) {
-            booksOffered.push(bookForDisplay);
-            matchScore += 5; // High score for explicit match
+            booksOfferedToCurrentUser.push(bookForDisplay);
+            matchScore += 5;
           } else {
-            // Fallback to author matching if not explicitly wanted
             const hasMatchingAuthor = currentUserWantedBooks.some(
-              wantedBook => wantedBook.author.toLowerCase() === ownerBook.author.toLowerCase()
+              wantedBook => wantedBook.author.toLowerCase() === ownerBook.author.toLowerCase() &&
+                            (wantedBook.condition === "any" || wantedBook.condition === ownerBook.condition)
             );
-            
             if (hasMatchingAuthor) {
-              booksOffered.push(bookForDisplay);
-              matchScore += 2; // Medium score for author match
+              booksOfferedToCurrentUser.push(bookForDisplay);
+              matchScore += 2;
             } else {
-              // Check for partial title matches as last resort
               const hasRelatedTitle = currentUserWantedBooks.some(wantedBook => {
-                const wantedBookWords = wantedBook.title.toLowerCase().split(' ');
-                const ownerBookWords = ownerBook.title.toLowerCase().split(' ');
+                const wantedBookWords = wantedBook.title.toLowerCase().split(" ");
+                const ownerBookWords = ownerBook.title.toLowerCase().split(" ");
                 return wantedBookWords.some(word => 
                   word.length > 3 && ownerBookWords.includes(word)
-                );
+                ) && (wantedBook.condition === "any" || wantedBook.condition === ownerBook.condition);
               });
-              
               if (hasRelatedTitle) {
-                booksOffered.push(bookForDisplay);
-                matchScore += 1; // Low score for title similarity
+                booksOfferedToCurrentUser.push(bookForDisplay);
+                matchScore += 1;
               }
             }
           }
         }
         
         // Find books that the current user has that the other user wants
-        for (const userBook of currentUserBooks) {
-          // Convert to Book type for display
+        for (const userBook of currentUserBooks) { // userBook is BookType
+          const isExplicitlyWantedByOther = ownerWantedBooks.some(
+            wantedBook => // wantedBook is WantedBookType
+              wantedBook.title.toLowerCase() === userBook.title.toLowerCase() &&
+              wantedBook.author.toLowerCase() === userBook.author.toLowerCase() &&
+              (wantedBook.condition === "any" || wantedBook.condition === userBook.condition)
+          );
+
           const bookForDisplay: Book = {
             id: userBook.id,
             title: userBook.title,
             author: userBook.author,
-            coverColor: userBook.cover_color || '#436B95',
+            coverColor: userBook.cover_color || "#436B95",
             description: userBook.description || "",
             condition: userBook.condition,
             owner: {
-              name: user.displayName || user.email || 'You',
-              neighborhood: userBook.owner?.neighborhood || 'Your neighborhood'
+              name: user.displayName || user.email || "You",
+              neighborhood: userBook.neighborhood // Current user's book's neighborhood (should be profile default)
             }
           };
-          
-          // Check if this book matches any of the other user's wanted books
-          const isExplicitlyWanted = ownerWantedBooks.some(
-            wantedBook => 
-              wantedBook.title.toLowerCase() === userBook.title.toLowerCase() &&
-              wantedBook.author.toLowerCase() === userBook.author.toLowerCase()
-          );
-          
-          if (isExplicitlyWanted) {
-            booksWanted.push(bookForDisplay);
-            matchScore += 5; // High score for explicit match
+
+          if (isExplicitlyWantedByOther) {
+            booksWantedByCurrentUser.push(bookForDisplay);
+            matchScore += 5;
           } else {
-            // Fallback to author matching if not explicitly wanted
             const hasMatchingAuthor = ownerWantedBooks.some(
-              wantedBook => wantedBook.author.toLowerCase() === userBook.author.toLowerCase()
+              wantedBook => wantedBook.author.toLowerCase() === userBook.author.toLowerCase() &&
+                            (wantedBook.condition === "any" || wantedBook.condition === userBook.condition)
             );
-            
             if (hasMatchingAuthor) {
-              booksWanted.push(bookForDisplay);
-              matchScore += 2; // Medium score for author match
+              booksWantedByCurrentUser.push(bookForDisplay);
+              matchScore += 2;
             } else {
-              // Check for partial title matches as last resort
               const hasRelatedTitle = ownerWantedBooks.some(wantedBook => {
-                const wantedBookWords = wantedBook.title.toLowerCase().split(' ');
-                const userBookWords = userBook.title.toLowerCase().split(' ');
+                const wantedBookWords = wantedBook.title.toLowerCase().split(" ");
+                const userBookWords = userBook.title.toLowerCase().split(" ");
                 return wantedBookWords.some(word => 
                   word.length > 3 && userBookWords.includes(word)
-                );
+                ) && (wantedBook.condition === "any" || wantedBook.condition === userBook.condition);
               });
-              
               if (hasRelatedTitle) {
-                booksWanted.push(bookForDisplay);
-                matchScore += 1; // Low score for title similarity
+                booksWantedByCurrentUser.push(bookForDisplay);
+                matchScore += 1;
               }
             }
           }
         }
         
-        // Only include matches that have at least one book in either direction
-        if (booksOffered.length > 0 || booksWanted.length > 0) {
-          // Normalize match score to be out of 10
+        if (booksOfferedToCurrentUser.length > 0 || booksWantedByCurrentUser.length > 0) {
           const normalizedScore = Math.min(Math.round(matchScore / 2), 10);
           
-          matches.push({
+          generatedMatches.push({
             user: {
               id: ownerId,
               name: ownerInfo.name,
               neighborhood: ownerInfo.neighborhood,
-              booksOffered,
-              booksWanted
+              booksOffered: booksOfferedToCurrentUser,
+              booksWanted: booksWantedByCurrentUser
             },
             matchScore: normalizedScore
           });
         }
       }
       
-      // Sort matches by score (highest first)
-      return matches.sort((a, b) => b.matchScore - a.matchScore);
+      return generatedMatches.sort((a, b) => b.matchScore - a.matchScore);
     },
-    enabled: !!user // Only run query if user is authenticated
+    enabled: !!user
   });
 
   const handleRequestSwap = (bookId: string) => {
@@ -235,7 +233,10 @@ const Matches = () => {
     });
   };
 
-  const handleStartChat = (userId: string) => {
+  const handleStartChat = (otherUserId: string) => {
+    // Navigate to chat or open chat modal with otherUserId
+    // This part depends on how chat is implemented
+    navigate(`/chat/${otherUserId}`); // Example navigation
     toast({
       title: "Chat started",
       description: "You can now coordinate the book swap.",
@@ -292,7 +293,7 @@ const Matches = () => {
         <h1 className="section-heading">Your Book Swap Matches</h1>
 
         <p className="text-center text-muted-foreground mb-8 max-w-2xl mx-auto">
-          These are potential swap partners based on the books you've listed and the books you're looking for. 
+          These are potential swap partners based on the books you have listed and the books you are looking for. 
           Higher match scores indicate more opportunities to swap multiple books with the same person.
         </p>
 
@@ -305,11 +306,11 @@ const Matches = () => {
             <ul className="text-left max-w-md mx-auto space-y-2 mb-6">
               <li className="flex items-start">
                 <span className="mr-2">•</span>
-                <span>Add more books that you're willing to swap</span>
+                <span>Add more books that you are willing to swap</span>
               </li>
               <li className="flex items-start">
                 <span className="mr-2">•</span>
-                <span>Add books you're looking for to your wishlist</span>
+                <span>Add books you are looking for to your wishlist</span>
               </li>
               <li className="flex items-start">
                 <span className="mr-2">•</span>
@@ -386,3 +387,4 @@ const Matches = () => {
 };
 
 export default Matches;
+

@@ -7,16 +7,14 @@ import { toast } from "sonner";
 interface ImageUploadProps {
   initialUrl?: string | null;
   onUpload: (url: string) => void;
-  // In a real app, this URL should come from a config or environment variable
-  cloudFunctionUrl?: string;
+  // cloudFunctionUrl prop is no longer needed as the API route handles the destination
 }
 
-const DEFAULT_CLOUD_FUNCTION_URL = "https://us-central1-books-794a8.cloudfunctions.net/uploadProfilePicture";
+// DEFAULT_CLOUD_FUNCTION_URL is no longer needed here, it's in the API route
 
 export function ImageUpload({
   initialUrl,
   onUpload,
-  cloudFunctionUrl = DEFAULT_CLOUD_FUNCTION_URL
 }: ImageUploadProps) {
   const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
@@ -39,12 +37,12 @@ export function ImageUpload({
 
       try {
         const formData = new FormData();
-        formData.append("profileImage", file); // "profileImage" is the fieldname the Cloud Function expects
+        formData.append("profileImage", file); // Field name expected by the API route
 
-        // Pass userId as a query parameter
-        const uploadUrl = `${cloudFunctionUrl}?userId=${user.uid}`;
+        // The new upload URL is our Next.js API proxy route
+        // Pass userId as a query parameter to the API route
+        const uploadUrl = `/api/upload-profile-image?userId=${user.uid}`;
 
-        // Get the Firebase Auth ID token for secure backend authentication
         const token = await user.getIdToken();
 
         const response = await fetch(uploadUrl, {
@@ -52,19 +50,26 @@ export function ImageUpload({
           body: formData,
           headers: {
             // Pass the Firebase Auth ID token in the Authorization header
-            // The backend (Cloud Function) should verify this token
+            // The Next.js API route will forward this to the Cloud Function
             "Authorization": `Bearer ${token}`,
           },
         });
 
-        if (!response.ok) {
-          // Attempt to parse error message from backend, otherwise use statusText
-          const errorData = await response.json().catch(() => ({ message: `Request failed with status ${response.status}` }));
-          throw new Error(`Upload failed: ${errorData.message || response.statusText}`);
-        }
+        // Attempt to parse error message from backend, otherwise use statusText
+        // This logic remains the same as the API route should mirror the Cloud Function's response structure on success/failure
+        const responseData = await response.json().catch(() => ({ message: `Request failed with status ${response.status}` }));
 
-        const result = await response.json();
-        const newAvatarUrl = result.imageUrl;
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${responseData.message || response.statusText}`);
+        }
+        
+        // Assuming the proxy returns the same JSON structure with imageUrl
+        const newAvatarUrl = responseData.imageUrl;
+        if (!newAvatarUrl) {
+            // If imageUrl is not in the response, it might be nested or the proxy returned an unexpected success format
+            console.error("Unexpected response structure from proxy:", responseData);
+            throw new Error("Upload succeeded but imageUrl was not found in the response.");
+        }
 
         setAvatarUrl(newAvatarUrl);
         onUpload(newAvatarUrl); // Callback to parent component with the new URL
@@ -81,7 +86,7 @@ export function ImageUpload({
         }
       }
     },
-    [user, onUpload, cloudFunctionUrl] // Dependencies for useCallback
+    [user, onUpload] // cloudFunctionUrl removed from dependencies
   );
 
   return (

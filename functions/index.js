@@ -1,7 +1,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const Busboy = require("busboy");
-const cors = require("cors")({ origin: true });
+const cors = require("cors")({ origin: ["https://englishbookswap.com"] }); // Restrict to your domain
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
@@ -11,27 +11,26 @@ admin.initializeApp();
 
 const storage = admin.storage();
 
-exports.uploadProfilePicture = functions.https.onRequest((req, res) => {
-  cors(req, res, () => {
+exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
+  cors(req, res, async () => {
     if (req.method !== "POST") {
       return res.status(405).send("Method Not Allowed");
     }
 
-    // Check for authentication (optional but recommended)
-    // This example assumes the client sends an auth token in headers
-    // and you verify it here. For simplicity, we'll skip detailed auth
-    // token verification, but in a real app, you MUST secure this.
-    // const idToken = req.headers.authorization?.split("Bearer ")[1];
-    // if (!idToken) {
-    //   return res.status(401).send("Unauthorized: No token provided.");
-    // }
-    // try {
-    //   const decodedToken = await admin.auth().verifyIdToken(idToken);
-    //   req.user = decodedToken; // Attach user to request
-    // } catch (error) {
-    //   console.error("Error verifying Firebase ID token:", error);
-    //   return res.status(401).send("Unauthorized: Invalid token.");
-    // }
+    // Enforce authentication
+    const idToken = req.headers.authorization?.split("Bearer ")[1];
+    if (!idToken) {
+      return res.status(401).send("Unauthorized: No token provided.");
+    }
+    
+    let userId;
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      userId = decodedToken.uid; // Get userId from the verified token
+    } catch (error) {
+      console.error("Error verifying Firebase ID token:", error);
+      return res.status(401).send("Unauthorized: Invalid token.");
+    }
 
     const busboy = Busboy({ headers: req.headers });
     const tmpdir = os.tmpdir();
@@ -43,10 +42,7 @@ exports.uploadProfilePicture = functions.https.onRequest((req, res) => {
       const { filename, encoding, mimeType } = MimeType;
       console.log(`File [${fieldname}]: filename: ${filename}, encoding: ${encoding}, mimeType: ${mimeType}`);
       
-      // Extract user ID from the request, e.g., from query param or authenticated user
-      // For this example, let's assume it's passed as a query parameter `userId`
-      // In a real app, use the authenticated req.user.uid
-      const userId = req.query.userId || "unknown_user"; 
+      // Use the authenticated userId from the token
       const fileExt = filename.split(".").pop();
       const randomFileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filepath = path.join(tmpdir, randomFileName);
@@ -68,16 +64,11 @@ exports.uploadProfilePicture = functions.https.onRequest((req, res) => {
           destination: uploadData.storagePath,
           metadata: {
             contentType: uploadData.type,
-            // You can add more metadata here, like cache control
-            // cacheControl: "public, max-age=31536000",
+            cacheControl: "public, max-age=31536000", // Cache for 1 year
           },
         });
 
-        // Make the file public (if desired, or generate signed URL)
-        // await uploadedFile.makePublic(); 
-        // const publicUrl = uploadedFile.publicUrl();
-
-        // Or get a signed URL (more secure, expires)
+        // Get a signed URL (more secure, expires)
         const expires = new Date();
         expires.setFullYear(expires.getFullYear() + 1); // 1 year expiry
         const [signedUrl] = await uploadedFile.getSignedUrl({
@@ -93,11 +84,10 @@ exports.uploadProfilePicture = functions.https.onRequest((req, res) => {
         if (uploadData && uploadData.file) {
           fs.unlinkSync(uploadData.file); // Clean up temporary file on error
         }
-        return res.status(500).send("Error uploading file.");
+        return res.status(500).send(`Error uploading file: ${err.message}`);
       }
     });
 
     busboy.end(req.rawBody);
   });
 });
-

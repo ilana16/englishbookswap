@@ -3,6 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User as UserIcon } from "lucide-react"; // Renamed to avoid conflict if User type is imported
 import { useAuth } from "@/components/AuthProvider";
 import { toast } from "sonner";
+import { uploadProfilePictureViaFunction } from "@/integrations/firebase/client";
 
 interface ImageUploadProps {
   initialUrl?: string | null;
@@ -33,37 +34,9 @@ export function ImageUpload({
       setIsUploading(true);
 
       try {
-        const formData = new FormData();
-        formData.append("profileImage", file); // Field name expected by the Netlify Function
-
-        // The new upload URL is our Netlify Function endpoint
-        // Pass userId as a query parameter to the Netlify Function
-        const uploadUrl = `/.netlify/functions/upload-profile-image?userId=${user.uid}`;
-
-        const token = await user.getIdToken();
-
-        const response = await fetch(uploadUrl, {
-          method: "POST",
-          body: formData,
-          headers: {
-            // Pass the Firebase Auth ID token in the Authorization header
-            // The Netlify Function will forward this to the Cloud Function
-            "Authorization": `Bearer ${token}`,
-          },
-        });
-
-        const responseData = await response.json().catch(() => ({ message: `Request failed with status ${response.status}` }));
-
-        if (!response.ok) {
-          throw new Error(`Upload failed: ${responseData.message || response.statusText}`);
-        }
+        // Use the Firebase Cloud Function utility instead of direct Netlify function call
+        const newAvatarUrl = await uploadProfilePictureViaFunction(file, user.uid);
         
-        const newAvatarUrl = responseData.imageUrl;
-        if (!newAvatarUrl) {
-            console.error("Unexpected response structure from Netlify Function proxy:", responseData);
-            throw new Error("Upload succeeded but imageUrl was not found in the response.");
-        }
-
         setAvatarUrl(newAvatarUrl);
         onUpload(newAvatarUrl);
         toast.success("Avatar uploaded successfully!");
@@ -104,4 +77,3 @@ export function ImageUpload({
     </div>
   );
 }
-

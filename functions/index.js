@@ -1,7 +1,12 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const Busboy = require("busboy");
-const cors = require("cors")({ origin: ["https://englishbookswap.com"] }); // Restrict to your domain
+const cors = require("cors")({ 
+  origin: true, // Allow requests from any origin
+  methods: ['POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+});
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
@@ -12,6 +17,19 @@ admin.initializeApp();
 const storage = admin.storage();
 
 exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
+  // Set CORS headers for preflight requests
+  res.set('Access-Control-Allow-Origin', 'https://englishbookswap.com');
+  res.set('Access-Control-Allow-Methods', 'POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  // Handle the actual request
   cors(req, res, async () => {
     if (req.method !== "POST") {
       return res.status(405).send("Method Not Allowed");

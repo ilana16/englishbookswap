@@ -21,9 +21,9 @@ import {
   signInWithPopup,
   User
 } from "firebase/auth";
-// Remove direct storage imports if no longer used directly by client for uploads
-// import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; 
-import { db, auth, storage } from "./config"; // storage might still be used for other things
+// Import storage functions for direct uploads
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, auth, storage } from "./config";
 import { COLLECTIONS } from "./types";
 
 // Function to add a book the user has
@@ -280,61 +280,30 @@ export const getCurrentUser = () => {
   return auth.currentUser;
 };
 
-// OLD File upload function - to be replaced or kept for other uses if any
-// export const uploadFile = async (file, path) => {
-//   try {
-//     const storageRef = ref(storage, path);
-//     const snapshot = await uploadBytes(storageRef, file);
-//     const downloadURL = await getDownloadURL(snapshot.ref);
-//     return downloadURL;
-//   } catch (error) {
-//     console.error("Error uploading file:", error);
-//     throw error;
-//   }
-// };
-
-// NEW function to upload profile picture via Cloud Function
+// Updated function to upload profile picture directly to Firebase Storage
 export const uploadProfilePictureViaFunction = async (file: File, userId: string): Promise<string> => {
-  const formData = new FormData();
-  formData.append("profileImage", file); // The Cloud Function expects the fieldname used in busboy.on("file", (fieldname...))
-
-  // Replace with your actual Cloud Function URL and region if different
-  const functionUrl = `https://us-central1-books-794a8.cloudfunctions.net/uploadProfilePicture?userId=${userId}`;
-
   try {
     const user = getCurrentUser();
-    let token = null;
-    if (user) {
-      token = await user.getIdToken();
+    if (!user) {
+      throw new Error("User not authenticated");
     }
-
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      body: formData,
-      headers: {
-        // Include Authorization header if your Cloud Function verifies it
-        ...(token && { "Authorization": `Bearer ${token}` }),
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("Error response from Cloud Function:", errorData);
-      throw new Error(`Error uploading image: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    if (!result.imageUrl) {
-      console.error("Cloud Function did not return imageUrl:", result);
-      throw new Error("Failed to get image URL from upload function.");
-    }
-    return result.imageUrl;
+    
+    // Create a storage reference with a unique filename
+    const fileExtension = file.name.split('.').pop() || 'jpg';
+    const storageRef = ref(storage, `profile-pictures/${userId}/avatar.${fileExtension}`);
+    
+    // Upload the file
+    const uploadTask = await uploadBytes(storageRef, file);
+    
+    // Get the download URL
+    const downloadURL = await getDownloadURL(uploadTask.ref);
+    
+    return downloadURL;
   } catch (error) {
-    console.error("Error calling uploadProfilePicture Cloud Function:", error);
+    console.error("Error uploading profile picture:", error);
     throw error;
   }
 };
-
 
 // Chat functions
 export const getChats = async (userId) => {
@@ -450,4 +419,3 @@ export const updateProfile = async (userId: string, profileData: any) => {
     throw error;
   }
 };
-

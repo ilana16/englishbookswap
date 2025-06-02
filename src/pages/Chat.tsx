@@ -17,7 +17,6 @@ interface ChatContact {
   lastMessage: string | null;
   lastMessageTime: string;
   unread: boolean;
-  avatar: string | null;
 }
 
 interface Message {
@@ -49,8 +48,7 @@ const Chat = () => {
         name: chat.participants?.find(p => p !== userId) || "Unknown",
         lastMessage: chat.last_message || "No messages yet",
         lastMessageTime: chat.updated_at ? new Date(chat.updated_at.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "",
-        unread: chat.unread || false,
-        avatar: null
+        unread: chat.unread || false
       }));
     }
   });

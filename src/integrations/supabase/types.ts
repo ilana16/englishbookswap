@@ -50,7 +50,6 @@ export type Database = {
       }
       chats: {
         Row: {
-          avatar: string | null
           created_at: string
           id: string
           last_message: string | null
@@ -61,7 +60,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          avatar?: string | null
           created_at?: string
           id?: string
           last_message?: string | null
@@ -72,7 +70,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          avatar?: string | null
           created_at?: string
           id?: string
           last_message?: string | null
@@ -121,7 +118,6 @@ export type Database = {
       }
       profiles: {
         Row: {
-          avatar_url: string | null
           bio: string | null
           created_at: string
           display_name: string | null
@@ -131,7 +127,6 @@ export type Database = {
           username: string | null
         }
         Insert: {
-          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           display_name?: string | null
@@ -141,7 +136,6 @@ export type Database = {
           username?: string | null
         }
         Update: {
-          avatar_url?: string | null
           bio?: string | null
           created_at?: string
           display_name?: string | null

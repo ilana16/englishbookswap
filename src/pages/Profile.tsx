@@ -4,7 +4,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch } from "firebase/firestore"; // Added collection, query, where, getDocs, writeBatch
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
-import { ImageUpload } from "@/components/profile/ImageUpload";
 import { NeighborhoodSelect } from "@/components/profile/NeighborhoodSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +17,7 @@ export default function Profile() {
   const [displayName, setDisplayName] = useState<string>("");
   const [bio, setBio] = useState<string>("");
   const [neighborhood, setNeighborhood] = useState<string>("");
-  const [originalNeighborhood, setOriginalNeighborhood] = useState<string>(""); // To track if neighborhood changed
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [originalNeighborhood, setOriginalNeighborhood] = useState<string>("");
 
   useEffect(() => {
     if (!user) {
@@ -39,14 +37,12 @@ export default function Profile() {
           setBio(data.bio ?? "");
           setNeighborhood(data.neighborhood ?? "");
           setOriginalNeighborhood(data.neighborhood ?? ""); // Store initial neighborhood
-          setAvatarUrl(data.avatar_url);
         } else {
           await setDoc(profileRef, {
             id: user.uid,
             display_name: "",
             bio: "",
             neighborhood: "",
-            avatar_url: null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           });
@@ -75,7 +71,6 @@ export default function Profile() {
         display_name: displayName,
         bio,
         neighborhood, // new neighborhood value
-        avatar_url: avatarUrl,
         updated_at: new Date().toISOString(),
       });
       toast.success("Profile updated successfully");
@@ -142,13 +137,6 @@ export default function Profile() {
       <div className="page-container max-w-2xl mx-auto">
         <h1 className="section-heading">Profile Settings</h1>
         <div className="space-y-8">
-          <div className="flex justify-center">
-            <ImageUpload
-              initialUrl={avatarUrl}
-              onUpload={(url) => setAvatarUrl(url)}
-            />
-          </div>
-
           <div className="space-y-4">
             <div>
               <label htmlFor="displayName" className="block text-sm font-medium mb-2">
@@ -195,4 +183,3 @@ export default function Profile() {
     </Layout>
   );
 }
-

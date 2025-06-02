@@ -21,9 +21,7 @@ import {
   signInWithPopup,
   User
 } from "firebase/auth";
-// Import storage functions for direct uploads
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, auth, storage } from "./config";
+import { db, auth } from "./config";
 import { COLLECTIONS } from "./types";
 
 // Function to add a book the user has
@@ -278,31 +276,6 @@ export const onAuthChange = (callback) => {
 
 export const getCurrentUser = () => {
   return auth.currentUser;
-};
-
-// Updated function to upload profile picture directly to Firebase Storage
-export const uploadProfilePictureViaFunction = async (file: File, userId: string): Promise<string> => {
-  try {
-    const user = getCurrentUser();
-    if (!user) {
-      throw new Error("User not authenticated");
-    }
-    
-    // Create a storage reference with a unique filename
-    const fileExtension = file.name.split('.').pop() || 'jpg';
-    const storageRef = ref(storage, `profile-pictures/${userId}/avatar.${fileExtension}`);
-    
-    // Upload the file
-    const uploadTask = await uploadBytes(storageRef, file);
-    
-    // Get the download URL
-    const downloadURL = await getDownloadURL(uploadTask.ref);
-    
-    return downloadURL;
-  } catch (error) {
-    console.error("Error uploading profile picture:", error);
-    throw error;
-  }
 };
 
 // Chat functions

@@ -37,7 +37,6 @@ export interface WantedBook {
 }
 
 export interface Chat {
-  avatar: string | null;
   created_at: string;
   id: string;
   last_message: string | null;
@@ -58,7 +57,6 @@ export interface Message {
 }
 
 export interface Profile {
-  avatar_url: string | null;
   bio: string | null;
   created_at: string;
   display_name: string | null;
@@ -76,4 +74,3 @@ export const COLLECTIONS = {
   MESSAGES: 'messages',
   PROFILES: 'profiles'
 } as const;
-

@@ -2,8 +2,12 @@ import { Button } from "@/components/ui/button";
 import { getBookById } from "@/services/googleBooks";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { createOrGetChat } from "@/services/chatService";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/components/ui/use-toast";
+import { useState } from "react";
 
 export interface Book {
   id: string;
@@ -23,11 +27,14 @@ export interface Book {
 
 interface BookCardProps {
   book: Book;
-  onRequestSwap: (bookId: string) => void;
+  onRequestSwap: (bookId: string, ownerId: string) => void;
+  isLoadingSwap?: boolean;
 }
 
-export function BookCard({ book, onRequestSwap }: BookCardProps) {
+export function BookCard({ book, onRequestSwap, isLoadingSwap = false }: BookCardProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isLoadingMessage, setIsLoadingMessage] = useState(false);
   
   const { data: googleBook } = useQuery({
     queryKey: ['book', book.google_books_id],
@@ -37,9 +44,54 @@ export function BookCard({ book, onRequestSwap }: BookCardProps) {
   
   const coverImage = googleBook?.volumeInfo.imageLinks?.thumbnail;
   
-  const handleMessageClick = () => {
+  const handleMessageClick = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to send a message.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!book.owner.id) {
+      toast({
+        title: "Error",
+        description: "Cannot message this book owner.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (user.uid === book.owner.id) {
+      toast({
+        title: "Cannot message yourself",
+        description: "You cannot send a message to yourself.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoadingMessage(true);
+
+    try {
+      const chatId = await createOrGetChat(user.uid, book.owner.id, book.id);
+      navigate(`/chat/${chatId}`);
+    } catch (error) {
+      console.error('Error creating chat:', error);
+      toast({
+        title: "Error",
+        description: "Failed to start conversation. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoadingMessage(false);
+    }
+  };
+
+  const handleSwapClick = () => {
     if (book.owner.id) {
-      navigate(`/chat/new?userId=${book.owner.id}&bookId=${book.id}`);
+      onRequestSwap(book.id, book.owner.id);
     }
   };
   
@@ -76,17 +128,30 @@ export function BookCard({ book, onRequestSwap }: BookCardProps) {
         <Button 
           variant="default" 
           className="flex-1"
-          onClick={() => onRequestSwap(book.id)}
+          onClick={handleSwapClick}
+          disabled={isLoadingSwap || !book.owner.id}
         >
-          Request Swap
+          {isLoadingSwap ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Requesting...
+            </>
+          ) : (
+            'Request Swap'
+          )}
         </Button>
         <Button
           variant="outline"
           className="flex items-center justify-center"
           onClick={handleMessageClick}
+          disabled={isLoadingMessage || !book.owner.id}
           title="Message the book owner"
         >
-          <MessageCircle size={18} />
+          {isLoadingMessage ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <MessageCircle size={18} />
+          )}
         </Button>
       </CardFooter>
     </Card>

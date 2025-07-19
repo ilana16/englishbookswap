@@ -3,7 +3,7 @@ import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { getChats, getMessages, sendMessage, getCurrentUser } from "@/integrations/firebase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/use-toast";
@@ -28,7 +28,8 @@ interface Message {
 }
 
 const Chat = () => {
-  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const { chatId } = useParams<{ chatId?: string }>();
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(chatId || null);
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -54,10 +55,12 @@ const Chat = () => {
   });
 
   useEffect(() => {
-    if (contacts.length > 0 && !selectedContactId) {
+    if (chatId) {
+      setSelectedContactId(chatId);
+    } else if (contacts.length > 0 && !selectedContactId) {
       setSelectedContactId(contacts[0].id);
     }
-  }, [contacts]);
+  }, [contacts, chatId]);
 
   // Load messages when a contact is selected
   useEffect(() => {

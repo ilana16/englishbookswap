@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
+import { notifyNewMessage } from './emailService';
 
 export interface ChatData {
   id?: string;
@@ -103,6 +104,29 @@ export const sendMessage = async (
     };
     
     const docRef = await addDoc(collection(db, 'messages'), messageData);
+    
+    // Get chat details to find the recipient and book info
+    try {
+      const chatDoc = await getDoc(doc(db, 'chats', chatId));
+      if (chatDoc.exists()) {
+        const chatData = chatDoc.data();
+        const participants = chatData.participants || [];
+        const recipientId = participants.find((id: string) => id !== senderId);
+        
+        if (recipientId) {
+          await notifyNewMessage(
+            chatId,
+            senderId,
+            recipientId,
+            content,
+            chatData.book_title
+          );
+        }
+      }
+    } catch (emailError) {
+      console.error('Failed to send email notification:', emailError);
+      // Don't fail the message if email fails
+    }
     
     // Update chat's last message
     // This would typically be done with a transaction or cloud function

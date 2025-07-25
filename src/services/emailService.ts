@@ -149,12 +149,18 @@ const EMAIL_TEMPLATES = {
 
 // Get user's email from their profile
 export const getUserEmail = async (userId: string): Promise<string | null> => {
+  console.log('=== getUserEmail called with userId:', userId);
   try {
     const profileDoc = await getDoc(doc(db, 'profiles', userId));
+    console.log('Profile document exists:', profileDoc.exists());
     if (profileDoc.exists()) {
       const profileData = profileDoc.data();
-      return profileData.email || null;
+      console.log("Profile data:", profileData);
+      const email = profileData.email || profileData.auth_email || profileData.user_email || null;
+      console.log("Extracted email:", email);
+      return email;
     }
+    console.log('No profile document found for userId:', userId);
     return null;
   } catch (error) {
     console.error('Error getting user email:', error);
@@ -394,12 +400,25 @@ export const notifyNewMessage = async (
   messageContent: string,
   bookTitle?: string
 ): Promise<void> => {
+  console.log('=== EMAIL NOTIFICATION DEBUG START ===');
+  console.log('notifyNewMessage called with:', {
+    chatId,
+    senderId,
+    recipientId,
+    messageContent,
+    bookTitle
+  });
+  
   try {
     // Get sender and recipient names
+    console.log('Getting sender and recipient profiles...');
     const [senderDoc, recipientDoc] = await Promise.all([
       getDoc(doc(db, 'profiles', senderId)),
       getDoc(doc(db, 'profiles', recipientId))
     ]);
+
+    console.log('Sender doc exists:', senderDoc.exists());
+    console.log('Recipient doc exists:', recipientDoc.exists());
 
     const senderName = senderDoc.exists()
       ? (senderDoc.data().display_name || senderDoc.data().username || 'Book Swapper')
@@ -409,7 +428,11 @@ export const notifyNewMessage = async (
       ? (recipientDoc.data().display_name || recipientDoc.data().username || 'Book Lover')
       : 'Book Lover';
 
-    await queueEmailNotification(recipientId, 'new_message', {
+    console.log('Sender name:', senderName);
+    console.log('Recipient name:', recipientName);
+
+    console.log('Calling queueEmailNotification...');
+    const result = await queueEmailNotification(recipientId, 'new_message', {
       senderName,
       recipientName,
       messageContent,
@@ -417,8 +440,10 @@ export const notifyNewMessage = async (
       chatUrl: `${window.location.origin}/chat/${chatId}`
     });
 
-    console.log('New message notification sent');
+    console.log('queueEmailNotification result:', result);
+    console.log('=== EMAIL NOTIFICATION DEBUG END ===');
   } catch (error) {
+    console.error('=== EMAIL NOTIFICATION ERROR ===', error);
     console.error('Error sending new message notification:', error);
   }
 };

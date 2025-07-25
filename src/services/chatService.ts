@@ -103,7 +103,9 @@ export const sendMessage = async (
       timestamp: serverTimestamp()
     };
     
+    console.log('Attempting to send message:', messageData);
     const docRef = await addDoc(collection(db, 'messages'), messageData);
+    console.log('Message sent, docRef.id:', docRef.id);
     
     // Get chat details to find the recipient and book info
     try {
@@ -112,8 +114,18 @@ export const sendMessage = async (
         const chatData = chatDoc.data();
         const participants = chatData.participants || [];
         const recipientId = participants.find((id: string) => id !== senderId);
+        console.log('Chat data:', chatData);
+        console.log('Participants:', participants);
+        console.log('Recipient ID:', recipientId);
         
         if (recipientId) {
+          console.log('Calling notifyNewMessage with:', {
+            chatId,
+            senderId,
+            recipientId,
+            content,
+            bookTitle: chatData.book_title
+          });
           await notifyNewMessage(
             chatId,
             senderId,
@@ -121,7 +133,10 @@ export const sendMessage = async (
             content,
             chatData.book_title
           );
+          console.log('notifyNewMessage call completed.');
         }
+      } else {
+        console.log('Chat document not found for chatId:', chatId);
       }
     } catch (emailError) {
       console.error('Failed to send email notification:', emailError);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch } from "firebase/firestore"; // Added collection, query, where, getDocs, writeBatch
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp } from "firebase/firestore"; // Added serverTimestamp
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { NeighborhoodSelect } from "@/components/profile/NeighborhoodSelect";
@@ -37,14 +37,24 @@ export default function Profile() {
           setBio(data.bio ?? "");
           setNeighborhood(data.neighborhood ?? "");
           setOriginalNeighborhood(data.neighborhood ?? ""); // Store initial neighborhood
+          
+          // Check if email is missing and add it
+          if (!data.email && user.email) {
+            console.log('Adding email to existing profile:', user.email);
+            await updateDoc(profileRef, {
+              email: user.email,
+              updated_at: serverTimestamp()
+            });
+          }
         } else {
           await setDoc(profileRef, {
             id: user.uid,
             display_name: "",
             bio: "",
             neighborhood: "",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            email: user.email || "", // Add email to new profile
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
           });
           setOriginalNeighborhood(""); // Set for new profile
         }
@@ -71,7 +81,8 @@ export default function Profile() {
         display_name: displayName,
         bio,
         neighborhood, // new neighborhood value
-        updated_at: new Date().toISOString(),
+        email: user.email || "", // Ensure email is always synced
+        updated_at: serverTimestamp(),
       });
       toast.success("Profile updated successfully");
 

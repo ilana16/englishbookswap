@@ -93,6 +93,9 @@ export const sendMessage = async (
   senderName: string,
   content: string
 ): Promise<string> => {
+  console.log('=== SEND MESSAGE DEBUG START ===');
+  console.log('sendMessage called with:', { chatId, senderId, senderName, content });
+  
   try {
     const messageData: Omit<MessageData, 'id'> = {
       chat_id: chatId,
@@ -105,11 +108,14 @@ export const sendMessage = async (
     
     console.log('Attempting to send message:', messageData);
     const docRef = await addDoc(collection(db, 'messages'), messageData);
-    console.log('Message sent, docRef.id:', docRef.id);
+    console.log('Message sent successfully, docRef.id:', docRef.id);
     
     // Get chat details to find the recipient and book info
+    console.log('Getting chat details for email notification...');
     try {
       const chatDoc = await getDoc(doc(db, 'chats', chatId));
+      console.log('Chat document exists:', chatDoc.exists());
+      
       if (chatDoc.exists()) {
         const chatData = chatDoc.data();
         const participants = chatData.participants || [];
@@ -119,13 +125,15 @@ export const sendMessage = async (
         console.log('Recipient ID:', recipientId);
         
         if (recipientId) {
-          console.log('Calling notifyNewMessage with:', {
+          console.log('About to call notifyNewMessage with:', {
             chatId,
             senderId,
             recipientId,
             content,
             bookTitle: chatData.book_title
           });
+          
+          console.log('Calling notifyNewMessage...');
           await notifyNewMessage(
             chatId,
             senderId,
@@ -133,22 +141,24 @@ export const sendMessage = async (
             content,
             chatData.book_title
           );
-          console.log('notifyNewMessage call completed.');
+          console.log('notifyNewMessage call completed successfully.');
+        } else {
+          console.log('No recipient found in chat participants');
         }
       } else {
         console.log('Chat document not found for chatId:', chatId);
       }
     } catch (emailError) {
+      console.error('=== EMAIL NOTIFICATION ERROR ===');
       console.error('Failed to send email notification:', emailError);
+      console.error('Error details:', emailError);
       // Don't fail the message if email fails
     }
     
-    // Update chat's last message
-    // This would typically be done with a transaction or cloud function
-    // For now, we'll just return the message ID
-    
+    console.log('=== SEND MESSAGE DEBUG END ===');
     return docRef.id;
   } catch (error) {
+    console.error('=== SEND MESSAGE ERROR ===');
     console.error('Error sending message:', error);
     throw error;
   }

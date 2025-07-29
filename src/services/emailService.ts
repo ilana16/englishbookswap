@@ -8,7 +8,8 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-import { db } from '@/integrations/firebase/config';
+import { auth, db } from '@/integrations/firebase/config';
+import { User } from 'firebase/auth';
 
 export interface EmailNotification {
   id?: string;
@@ -147,20 +148,40 @@ const EMAIL_TEMPLATES = {
   }
 };
 
-// Get user's email from their profile
+// Get user's email from Firebase Authentication
 export const getUserEmail = async (userId: string): Promise<string | null> => {
   console.log('=== getUserEmail called with userId:', userId);
   try {
+    // First check if this is the current user
+    const currentUser = auth.currentUser;
+    if (currentUser && currentUser.uid === userId) {
+      console.log('Found current user email:', currentUser.email);
+      return currentUser.email;
+    }
+    
+    // For other users, we need to get their email from the profiles collection
+    // Since Firebase Auth doesn't allow querying other users' emails for security reasons,
+    // we'll need to store emails in the profiles collection or use a different approach
+    console.log('Checking profiles collection for user:', userId);
     const profileDoc = await getDoc(doc(db, 'profiles', userId));
     console.log('Profile document exists:', profileDoc.exists());
+    
     if (profileDoc.exists()) {
       const profileData = profileDoc.data();
       console.log("Profile data:", profileData);
+      
+      // Check if email was stored in profile (we'll need to add this)
       const email = profileData.email || profileData.auth_email || profileData.user_email || null;
-      console.log("Extracted email:", email);
-      return email;
+      console.log("Extracted email from profile:", email);
+      
+      if (email) {
+        return email;
+      }
     }
-    console.log('No profile document found for userId:', userId);
+    
+    // If no email found in profile, we cannot get other users' emails
+    // This is a Firebase security limitation - we can only access the current user's email
+    console.log('No email found for userId:', userId, '- Firebase Auth security limitation');
     return null;
   } catch (error) {
     console.error('Error getting user email:', error);
@@ -205,29 +226,37 @@ export const queueEmailNotification = async (
   templateType: 'new_match' | 'book_availability' | 'new_message',
   templateData: any
 ): Promise<string | null> => {
+  console.log('=== queueEmailNotification called ===');
+  console.log('Recipient user ID:', recipientUserId);
+  console.log('Template type:', templateType);
+  
   try {
     // Get user's email and preferences
     const userEmail = await getUserEmail(recipientUserId);
+    console.log('User email retrieved:', userEmail);
+    
     if (!userEmail) {
       console.log('No email found for user:', recipientUserId);
       return null;
     }
 
     const preferences = await getNotificationPreferences(recipientUserId);
+    console.log('User preferences:', preferences);
+    
     if (!preferences) {
-      console.log('No preferences found for user:', recipientUserId);
-      return null;
-    }
+      console.log('No preferences found for user, using defaults');
+      // If no preferences found, assume user wants notifications (default behavior)
+    } else {
+      // Check if user wants this type of notification
+      const wantsNotification = 
+        (templateType === 'new_match' && preferences.email_notifications.new_matches) ||
+        (templateType === 'book_availability' && preferences.email_notifications.book_availability) ||
+        (templateType === 'new_message' && preferences.email_notifications.new_messages);
 
-    // Check if user wants this type of notification
-    const wantsNotification = 
-      (templateType === 'new_match' && preferences.email_notifications.new_matches) ||
-      (templateType === 'book_availability' && preferences.email_notifications.book_availability) ||
-      (templateType === 'new_message' && preferences.email_notifications.new_messages);
-
-    if (!wantsNotification) {
-      console.log(`User ${recipientUserId} has disabled ${templateType} notifications`);
-      return null;
+      if (!wantsNotification) {
+        console.log(`User ${recipientUserId} has disabled ${templateType} notifications`);
+        return null;
+      }
     }
 
     // Get recipient name from profile
@@ -236,59 +265,64 @@ export const queueEmailNotification = async (
       ? (profileDoc.data().display_name || profileDoc.data().username || 'Book Lover')
       : 'Book Lover';
 
-    const emailNotification: Omit<EmailNotification, 'id'> = {
-      recipient_email: userEmail,
-      recipient_name: recipientName,
-      template_type: templateType,
-      template_data: templateData,
-      status: 'pending',
-      created_at: serverTimestamp()
+    // Add recipient name to template data
+    const enhancedTemplateData = {
+      ...templateData,
+      recipientName
     };
 
-    const docRef = await addDoc(collection(db, 'email_notifications'), emailNotification);
-    console.log('Email notification queued:', docRef.id);
+    console.log('Calling sendEmailNotification...');
+    const success = await sendEmailNotification(userEmail, templateType, enhancedTemplateData);
     
-    // In a real implementation, this would trigger a cloud function or background job
-    // For now, we'll simulate sending the email immediately
-    await sendEmailNotification(docRef.id);
-    
-    return docRef.id;
+    if (success) {
+      console.log('Email notification sent successfully to:', userEmail);
+      return 'sent';
+    } else {
+      console.log('Failed to send email notification');
+      return null;
+    }
   } catch (error) {
     console.error('Error queueing email notification:', error);
     return null;
   }
 };
 
-// Send an email notification (simulated)
-export const sendEmailNotification = async (notificationId: string): Promise<boolean> => {
+// Send an email notification using Firebase Trigger Email extension
+export const sendEmailNotification = async (
+  recipientEmail: string,
+  templateType: 'new_match' | 'book_availability' | 'new_message',
+  templateData: any
+): Promise<boolean> => {
+  console.log('=== sendEmailNotification called ===');
+  console.log('Recipient:', recipientEmail);
+  console.log('Template type:', templateType);
+  console.log('Template data:', templateData);
+  
   try {
-    const notificationDoc = await getDoc(doc(db, 'email_notifications', notificationId));
-    if (!notificationDoc.exists()) {
-      console.error('Notification not found:', notificationId);
-      return false;
-    }
-
-    const notification = notificationDoc.data() as EmailNotification;
-    const template = EMAIL_TEMPLATES[notification.template_type];
+    const template = EMAIL_TEMPLATES[templateType];
+    const subject = template.subject(templateData);
+    const htmlContent = template.html(templateData);
     
-    if (!template) {
-      console.error('Template not found for type:', notification.template_type);
-      return false;
-    }
+    console.log('Generated subject:', subject);
+    console.log('Generated HTML content length:', htmlContent.length);
 
-    const subject = template.subject(notification.template_data);
-    const htmlContent = template.html(notification.template_data);
-
-    // In a real implementation, this would use a service like SendGrid, Nodemailer, etc.
-    console.log('=== EMAIL NOTIFICATION ===');
-    console.log('To:', notification.recipient_email);
-    console.log('Subject:', subject);
-    console.log('HTML Content:', htmlContent);
-    console.log('========================');
-
-    // Update notification status to sent
-    // In a real implementation, you would update the document in Firestore
-    console.log('Email notification sent successfully:', notificationId);
+    // Write to mail collection - Firebase extension will automatically send the email
+    const mailDoc = {
+      to: [recipientEmail],
+      message: {
+        subject: subject,
+        html: htmlContent
+      },
+      template: {
+        name: templateType,
+        data: templateData
+      },
+      created_at: serverTimestamp()
+    };
+    
+    console.log('Writing email document to mail collection...');
+    const docRef = await addDoc(collection(db, 'mail'), mailDoc);
+    console.log('Email document written with ID:', docRef.id);
     
     return true;
   } catch (error) {

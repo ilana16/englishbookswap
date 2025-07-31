@@ -7,6 +7,7 @@ import { COLLECTIONS } from "@/integrations/firebase/types";
 import { NeighborhoodSelect } from "@/components/profile/NeighborhoodSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Layout } from "@/components/layout/Layout";
 
@@ -18,6 +19,7 @@ export default function Profile() {
   const [bio, setBio] = useState<string>("");
   const [neighborhood, setNeighborhood] = useState<string>("");
   const [originalNeighborhood, setOriginalNeighborhood] = useState<string>("");
+  const [receiveEmailNotifications, setReceiveEmailNotifications] = useState<boolean>(true);
 
   useEffect(() => {
     if (!user) {
@@ -37,10 +39,11 @@ export default function Profile() {
           setBio(data.bio ?? "");
           setNeighborhood(data.neighborhood ?? "");
           setOriginalNeighborhood(data.neighborhood ?? ""); // Store initial neighborhood
+          setReceiveEmailNotifications(data.email_notifications?.new_messages ?? true); // Load preference
           
           // Check if email is missing and add it
           if (!data.email && user.email) {
-            console.log('Adding email to existing profile:', user.email);
+            console.log("Adding email to existing profile:", user.email);
             await updateDoc(profileRef, {
               email: user.email,
               updated_at: serverTimestamp()
@@ -53,6 +56,11 @@ export default function Profile() {
             bio: "",
             neighborhood: "",
             email: user.email || "", // Add email to new profile
+            email_notifications: {
+              new_matches: true,
+              book_availability: true,
+              new_messages: true,
+            },
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
           });
@@ -82,6 +90,11 @@ export default function Profile() {
         bio,
         neighborhood, // new neighborhood value
         email: user.email || "", // Ensure email is always synced
+        email_notifications: {
+          new_matches: receiveEmailNotifications,
+          book_availability: receiveEmailNotifications,
+          new_messages: receiveEmailNotifications,
+        },
         updated_at: serverTimestamp(),
       });
       toast.success("Profile updated successfully");
@@ -183,6 +196,20 @@ export default function Profile() {
                 value={neighborhood}
                 onSelect={setNeighborhood}
               />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="emailNotifications"
+                checked={receiveEmailNotifications}
+                onCheckedChange={setReceiveEmailNotifications}
+              />
+              <label
+                htmlFor="emailNotifications"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                I want to receive email notifications about messages, matches, and books on my want list
+              </label>
             </div>
 
             <Button onClick={updateProfile} disabled={loading} className="w-full">

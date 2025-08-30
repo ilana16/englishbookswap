@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MessageCircle, User } from "lucide-react";
+import { ArrowRight, MessageCircle, User, ArrowLeft } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { getChats, getMessages, sendMessage, getCurrentUser } from "@/integrations/firebase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/use-toast";
 import { onSnapshot, collection, query, where, orderBy, doc, getDoc } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ChatContact {
   id: string;
@@ -32,10 +33,12 @@ interface Message {
 const Chat = () => {
   const { chatId } = useParams<{ chatId?: string }>();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [selectedContactId, setSelectedContactId] = useState<string | null>(chatId || null);
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [showChatView, setShowChatView] = useState(false); // For mobile navigation
   const queryClient = useQueryClient();
 
   const { data: contacts = [], isLoading, error } = useQuery<ChatContact[]>({
@@ -84,10 +87,16 @@ const Chat = () => {
   useEffect(() => {
     if (chatId) {
       setSelectedContactId(chatId);
+      if (isMobile) {
+        setShowChatView(true); // Show chat view on mobile when chatId is present
+      }
     } else if (contacts.length > 0 && !selectedContactId) {
       setSelectedContactId(contacts[0].id);
+      if (isMobile) {
+        setShowChatView(false); // Show conversation list on mobile when no chatId
+      }
     }
-  }, [contacts, chatId]);
+  }, [contacts, chatId, isMobile]);
 
   // Load messages when a contact is selected
   useEffect(() => {
@@ -169,6 +178,18 @@ const Chat = () => {
     setSelectedContactId(contactId);
     // Update URL to reflect the selected chat
     navigate(`/chat/${contactId}`, { replace: true });
+    
+    // On mobile, switch to chat view when a contact is selected
+    if (isMobile) {
+      setShowChatView(true);
+    }
+  };
+
+  const handleBackToContacts = () => {
+    if (isMobile) {
+      setShowChatView(false);
+      navigate('/chat', { replace: true });
+    }
   };
 
   const selectedContact = contacts.find(
@@ -210,8 +231,12 @@ const Chat = () => {
 
         <div className="bg-white border border-border rounded-lg overflow-hidden min-h-[600px] shadow-sm">
           <div className="flex h-full">
-            {/* Tab Bar - Left Sidebar */}
-            <div className="w-80 border-r border-border bg-gray-50/50">
+            {/* Conversation List - Show on desktop or mobile when showChatView is false */}
+            <div className={`${
+              isMobile 
+                ? (showChatView ? 'hidden' : 'w-full') 
+                : 'w-80'
+            } border-r border-border bg-gray-50/50 ${isMobile ? '' : 'flex-shrink-0'}`}>
               <div className="p-4 border-b border-border bg-white">
                 <h2 className="font-semibold text-lg flex items-center gap-2">
                   <User className="h-5 w-5" />
@@ -282,13 +307,27 @@ const Chat = () => {
               </div>
             </div>
 
-            {/* Active Message Space - Right Side */}
-            <div className="flex-1 flex flex-col">
+            {/* Chat View - Show on desktop or mobile when showChatView is true */}
+            <div className={`${
+              isMobile 
+                ? (showChatView ? 'w-full' : 'hidden') 
+                : 'flex-1'
+            } flex flex-col`}>
               {selectedContact ? (
                 <>
-                  {/* Chat Header */}
+                  {/* Chat Header with Back Button for Mobile */}
                   <div className="p-4 border-b border-border bg-white">
                     <div className="flex items-center">
+                      {isMobile && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={handleBackToContacts}
+                          className="mr-3"
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                      )}
                       <div className="w-10 h-10 rounded-full bg-bookswap-darkblue text-white flex items-center justify-center font-bold text-lg mr-3">
                         {selectedContact.name.charAt(0).toUpperCase()}
                       </div>
@@ -319,13 +358,13 @@ const Chat = () => {
                           }`}
                         >
                           <div
-                            className={`max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
+                            className={`${isMobile ? 'max-w-[85%]' : 'max-w-[75%]'} rounded-2xl px-4 py-3 shadow-sm ${
                               message.sender === "user"
                                 ? "bg-bookswap-darkblue text-white"
                                 : "bg-white border border-gray-200"
                             }`}
                           >
-                            <p className="text-sm leading-relaxed">{message.text}</p>
+                            <p className="text-sm leading-relaxed break-words">{message.text}</p>
                             <p className={`text-xs mt-2 ${
                               message.sender === "user"
                                 ? "text-white/80"

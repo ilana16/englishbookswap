@@ -14,7 +14,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
-import { notifyBookAvailability } from "@/services/emailService";
 
 const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
 const noPreferenceCondition = "No Preference";
@@ -152,21 +151,6 @@ const AddBook = () => {
           }
         };
         const bookId = await addBook(bookWithOwner);
-        
-        // Trigger book availability notification
-        try {
-          await notifyBookAvailability(
-            bookId,
-            selectedBook.volumeInfo.title,
-            selectedBook.volumeInfo.authors?.[0] || "Unknown Author",
-            user.uid,
-            conditionToSave,
-            userNeighborhood
-          );
-        } catch (emailError) {
-          console.error('Failed to send book availability notifications:', emailError);
-          // Don't fail the book addition if email fails
-        }
         
         toast.success("Book added to your collection!");
       } else {

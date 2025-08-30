@@ -10,9 +10,31 @@ const cors = require("cors")({
 const os = require("os");
 const fs = require("fs");
 const path = require("path");
+
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 const storage = admin.storage();
+
+// Helper function to send email
+const sendEmail = async (email, subject, message) => {
+  try {
+    const mailOptions = {
+      to: email,
+      message: {
+        subject: subject,
+        text: message,
+        html: `<p>${message}</p>`
+      }
+    };
+
+    await admin.firestore().collection('mail').add(mailOptions);
+    console.log(`Email sent to ${email}: ${subject}`);
+    return true;
+  } catch (error) {
+    console.error('Error sending email:', error);
+    return false;
+  }
+};
 
 // Profile picture upload function
 exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
@@ -27,11 +49,13 @@ exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
     res.status(204).send('');
     return;
   }
+  
   // Handle the actual request
   cors(req, res, async () => {
     if (req.method !== "POST") {
       return res.status(405).send("Method Not Allowed");
     }
+    
     // Enforce authentication
     const idToken = req.headers.authorization?.split("Bearer ")[1];
     if (!idToken) {
@@ -46,10 +70,12 @@ exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
       console.error("Error verifying Firebase ID token:", error);
       return res.status(401).send("Unauthorized: Invalid token.");
     }
+    
     const busboy = Busboy({ headers: req.headers });
     const tmpdir = os.tmpdir();
     let uploadData = null;
     let newFilePath = null;
+    
     busboy.on("file", (fieldname, file, MimeType) => {
       const { filename, encoding, mimeType } = MimeType;
       console.log(`File [${fieldname}]: filename: ${filename}, encoding: ${encoding}, mimeType: ${mimeType}`);
@@ -62,10 +88,12 @@ exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
       uploadData = { file: filepath, type: mimeType, storagePath: newFilePath };
       file.pipe(fs.createWriteStream(filepath));
     });
+    
     busboy.on("finish", async () => {
       if (!uploadData) {
         return res.status(400).send("No file uploaded.");
       }
+      
       const bucket = storage.bucket(); // Default bucket
       try {
         const [uploadedFile] = await bucket.upload(uploadData.file, {
@@ -75,6 +103,7 @@ exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
             cacheControl: "public, max-age=31536000", // Cache for 1 year
           },
         });
+        
         // Get a signed URL (more secure, expires)
         const expires = new Date();
         expires.setFullYear(expires.getFullYear() + 1); // 1 year expiry
@@ -82,6 +111,7 @@ exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
           action: "read",
           expires: expires.toISOString(),
         });
+        
         fs.unlinkSync(uploadData.file); // Clean up temporary file
         return res.status(200).json({ imageUrl: signedUrl });
       } catch (err) {
@@ -92,112 +122,52 @@ exports.uploadProfilePicture = functions.https.onRequest(async (req, res) => {
         return res.status(500).send(`Error uploading file: ${err.message}`);
       }
     });
+    
     busboy.end(req.rawBody);
   });
 });
 
-// Helper function to send email
-const sendEmail = async (email, subject, text) => {
-  try {
-    const mailOptions = {
-      from: 'English Book Swap <noreply@englishbookswap.com>',
-      to: email,
-      subject: subject,
-      text: text + '\n\nVisit our homepage: https://englishbookswap.com'
-    };
-
-    await admin.firestore().collection('mail').add(mailOptions);
-    console.log(`Email sent to ${email}`);
-    return true;
-  } catch (error) {
-    console.error('Error sending email:', error);
-    return false;
-  }
-};
-
-// 1. New Match Notification
-exports.sendMatchNotification = functions.firestore
-  .document('matches/{matchId}')
+// 1. New match notification - triggered when swap_requests are created
+exports.sendNewMatchNotification = functions.firestore
+  .document('swap_requests/{requestId}')
   .onCreate(async (snapshot, context) => {
     try {
-      const matchData = snapshot.data();
-      const { user1Id, user2Id, bookId1, bookId2 } = matchData;
+      const requestData = snapshot.data();
+      const { owner_id } = requestData;
       
-      // Get user information
-      const user1Doc = await admin.firestore().collection('profiles').doc(user1Id).get();
-      const user2Doc = await admin.firestore().collection('profiles').doc(user2Id).get();
-      
-      if (!user1Doc.exists || !user2Doc.exists) {
-        console.error('One or both users not found');
-        return null;
+      // Get owner's email
+      const ownerAuth = await admin.auth().getUser(owner_id);
+      if (ownerAuth.email) {
+        await sendEmail(
+          ownerAuth.email,
+          'New Book Match',
+          'You have a new book match.'
+        );
       }
-      
-      const user1 = user1Doc.data();
-      const user2 = user2Doc.data();
-      
-      // Get user email from Firebase Auth
-      const user1Auth = await admin.auth().getUser(user1Id);
-      const user2Auth = await admin.auth().getUser(user2Id);
-      
-      const matchUrl = `https://englishbookswap.com/matches/${context.params.matchId}`;
-      
-      // Send email to user1
-      await sendEmail(
-        user1Auth.email,
-        'New Book Match',
-        `You have a new book match with ${user2.displayName || 'another user'}! Click the link below to view the match details:\n\n${matchUrl}`
-      );
-      
-      // Send email to user2
-      await sendEmail(
-        user2Auth.email,
-        'New Book Match',
-        `You have a new book match with ${user1.displayName || 'another user'}! Click the link below to view the match details:\n\n${matchUrl}`
-      );
       
       return null;
     } catch (error) {
-      console.error('Error sending match notification:', error);
+      console.error('Error sending new match notification:', error);
       return null;
     }
   });
 
-// 2. Wanted Book Availability Notification
-exports.sendWantedBookNotification = functions.firestore
+// 2. Book availability notification - triggered when books are created
+exports.sendBookAvailabilityNotification = functions.firestore
   .document('books/{bookId}')
   .onCreate(async (snapshot, context) => {
     try {
       const bookData = snapshot.data();
-      const { title, author, google_books_id, owner } = bookData;
+      const { title, author, owner } = bookData;
       
       // Find users who want this book
-      let wantedBooksQuery;
+      const wantedBooksSnapshot = await admin.firestore()
+        .collection('wanted_books')
+        .where('title', '==', title)
+        .where('author', '==', author)
+        .get();
       
-      if (google_books_id) {
-        // If we have a Google Books ID, use that for matching
-        wantedBooksQuery = admin.firestore()
-          .collection('wanted_books')
-          .where('google_books_id', '==', google_books_id);
-      } else {
-        // Otherwise, try to match by title and author
-        wantedBooksQuery = admin.firestore()
-          .collection('wanted_books')
-          .where('title', '==', title)
-          .where('author', '==', author);
-      }
-      
-      const wantedBooksSnapshot = await wantedBooksQuery.get();
-      
-      if (wantedBooksSnapshot.empty) {
-        console.log('No users want this book');
-        return null;
-      }
-      
-      // Get owner profile
-      const ownerDoc = await admin.firestore().collection('profiles').doc(owner.id).get();
-      const ownerData = ownerDoc.exists ? ownerDoc.data() : { displayName: 'A user' };
-      
-      // For each user who wants this book
+      // Send notification to each user who wants this book
       const emailPromises = wantedBooksSnapshot.docs.map(async (doc) => {
         const wantedBookData = doc.data();
         const userId = wantedBookData.user_id;
@@ -208,20 +178,14 @@ exports.sendWantedBookNotification = functions.firestore
         }
         
         try {
-          // Get user email
           const userAuth = await admin.auth().getUser(userId);
-          const userEmail = userAuth.email;
-          
-          // Create message link
-          const messageUrl = `https://englishbookswap.com/chat/new?userId=${owner.id}&bookId=${context.params.bookId}`;
-          
-          // Send email notification
-          await sendEmail(
-            userEmail,
-            'A Book You Want is Available',
-            `Good news! A book you want is now available:\n\nTitle: ${title}\nAuthor: ${author}\n\nIt's available from ${ownerData.displayName || 'a user'} in ${owner.neighborhood}.\n\nClick here to message them about this book: ${messageUrl}`
-          );
-          
+          if (userAuth.email) {
+            await sendEmail(
+              userAuth.email,
+              'Book Available',
+              'A book you want is available.'
+            );
+          }
           return true;
         } catch (error) {
           console.error(`Error sending notification to user ${userId}:`, error);
@@ -232,18 +196,18 @@ exports.sendWantedBookNotification = functions.firestore
       await Promise.all(emailPromises);
       return null;
     } catch (error) {
-      console.error('Error sending wanted book notifications:', error);
+      console.error('Error sending book availability notifications:', error);
       return null;
     }
   });
 
-// 3. New Message Notification
-exports.sendMessageNotification = functions.firestore
+// 3. New message notification - triggered when messages are created
+exports.sendNewMessageNotification = functions.firestore
   .document('messages/{messageId}')
   .onCreate(async (snapshot, context) => {
     try {
       const messageData = snapshot.data();
-      const { chat_id, sender_id, sender_name, content } = messageData;
+      const { chat_id, sender_id } = messageData;
       
       // Get chat to find recipient
       const chatDoc = await admin.firestore().collection('chats').doc(chat_id).get();
@@ -264,23 +228,19 @@ exports.sendMessageNotification = functions.firestore
         return null;
       }
       
-      // Get recipient email
+      // Get recipient's email and send notification
       const recipientAuth = await admin.auth().getUser(recipientId);
-      const recipientEmail = recipientAuth.email;
-      
-      // Create chat URL
-      const chatUrl = `https://englishbookswap.com/chat/${chat_id}`;
-      
-      // Send email notification
-      await sendEmail(
-        recipientEmail,
-        'New Book Message',
-        `You got a message from ${sender_name || 'another user'}: ${content}\n\nClick here to view the conversation: ${chatUrl}`
-      );
+      if (recipientAuth.email) {
+        await sendEmail(
+          recipientAuth.email,
+          'New Message',
+          'You have a new book swap message.'
+        );
+      }
       
       return null;
     } catch (error) {
-      console.error('Error sending message notification:', error);
+      console.error('Error sending new message notification:', error);
       return null;
     }
   });

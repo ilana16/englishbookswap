@@ -8,13 +8,17 @@ const ALLOWED_FILE_TYPES = [
   'image/png', 
   'image/gif',
   'image/webp',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
+  'video/x-msvideo', // .avi
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'text/plain'
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (increased for video files)
 const MAX_FILES_PER_MESSAGE = 5;
 
 export interface UploadProgress {
@@ -28,7 +32,7 @@ export const validateFile = (file: File): { valid: boolean; error?: string } => 
   if (!ALLOWED_FILE_TYPES.includes(file.type)) {
     return {
       valid: false,
-      error: `File type ${file.type} is not supported. Allowed types: images, PDFs, Word documents, and text files.`
+      error: `File type ${file.type} is not supported. Allowed types: images, videos, PDFs, Word documents, and text files.`
     };
   }
 
@@ -155,6 +159,7 @@ export const deleteFile = async (filePath: string): Promise<void> => {
 
 export const getFileIcon = (fileType: string): string => {
   if (fileType.startsWith('image/')) return '🖼️';
+  if (fileType.startsWith('video/')) return '🎥';
   if (fileType === 'application/pdf') return '📄';
   if (fileType.includes('word') || fileType.includes('document')) return '📝';
   if (fileType === 'text/plain') return '📄';
@@ -173,5 +178,9 @@ export const formatFileSize = (bytes: number): string => {
 
 export const isImageFile = (fileType: string): boolean => {
   return fileType.startsWith('image/');
+};
+
+export const isVideoFile = (fileType: string): boolean => {
+  return fileType.startsWith('video/');
 };
 

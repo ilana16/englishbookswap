@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Paperclip, X, Upload, FileText, Image } from 'lucide-react';
+import { Paperclip, X, Upload, FileText, Image, Video } from 'lucide-react';
 import { FileAttachment } from '@/integrations/firebase/types';
 import { 
   validateFiles, 
@@ -9,7 +9,8 @@ import {
   UploadProgress,
   getFileIcon,
   formatFileSize,
-  isImageFile
+  isImageFile,
+  isVideoFile
 } from '@/utils/fileUpload';
 import { toast } from '@/components/ui/use-toast';
 
@@ -57,8 +58,17 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       const id = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const preview: FilePreview = { file, id };
 
-      // Create preview for images
+      // Create preview for images and videos
       if (isImageFile(file.type)) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          preview.preview = e.target?.result as string;
+          setSelectedFiles(prev => 
+            prev.map(p => p.id === id ? { ...p, preview: preview.preview } : p)
+          );
+        };
+        reader.readAsDataURL(file);
+      } else if (isVideoFile(file.type)) {
         const reader = new FileReader();
         reader.onload = (e) => {
           preview.preview = e.target?.result as string;
@@ -165,7 +175,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           multiple
           onChange={handleFileSelect}
           className="hidden"
-          accept="image/*,.pdf,.doc,.docx,.txt"
+          accept="image/*,video/*,.pdf,.doc,.docx,.txt"
         />
 
         {selectedFiles.length > 0 && (
@@ -190,7 +200,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
         >
           Drop files here or click the paperclip to select files
           <br />
-          <span className="text-xs">Supports: Images, PDFs, Word docs, Text files (max 10MB each)</span>
+          <span className="text-xs">Supports: Images, Videos, PDFs, Word docs, Text files (max 50MB each)</span>
         </div>
       )}
 
@@ -205,15 +215,25 @@ export const FileUpload: React.FC<FileUploadProps> = ({
               {/* File Icon/Preview */}
               <div className="flex-shrink-0">
                 {filePreview.preview ? (
-                  <img
-                    src={filePreview.preview}
-                    alt={filePreview.file.name}
-                    className="w-10 h-10 object-cover rounded"
-                  />
+                  isImageFile(filePreview.file.type) ? (
+                    <img
+                      src={filePreview.preview}
+                      alt={filePreview.file.name}
+                      className="w-10 h-10 object-cover rounded"
+                    />
+                  ) : isVideoFile(filePreview.file.type) ? (
+                    <video
+                      src={filePreview.preview}
+                      className="w-10 h-10 object-cover rounded"
+                      muted
+                    />
+                  ) : null
                 ) : (
                   <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center">
                     {isImageFile(filePreview.file.type) ? (
                       <Image className="h-5 w-5 text-gray-500" />
+                    ) : isVideoFile(filePreview.file.type) ? (
+                      <Video className="h-5 w-5 text-gray-500" />
                     ) : (
                       <FileText className="h-5 w-5 text-gray-500" />
                     )}

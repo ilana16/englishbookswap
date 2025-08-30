@@ -1,5 +1,5 @@
 // Email service that calls the deployed Flask email service
-const EMAIL_SERVICE_URL = 'https://77h9ikc6jdlv.manus.space/api/email';
+const EMAIL_SERVICE_URL = 'https://w5hni7cponmo.manus.space/api/email';
 
 interface EmailResponse {
   success: boolean;

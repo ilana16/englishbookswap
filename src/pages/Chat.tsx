@@ -9,8 +9,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/use-toast";
 import { onSnapshot, collection, query, where, orderBy, doc, getDoc } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
-import { COLLECTIONS } from "@/integrations/firebase/types";
+import { COLLECTIONS, FileAttachment } from "@/integrations/firebase/types";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { FileUpload } from "@/components/chat/FileUpload";
+import { MessageAttachments } from "@/components/chat/MessageAttachments";
 
 interface ChatContact {
   id: string;
@@ -28,6 +30,7 @@ interface Message {
   sender: "user" | "other";
   timestamp: string;
   sender_id: string;
+  attachments?: FileAttachment[];
 }
 
 const Chat = () => {
@@ -39,6 +42,7 @@ const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showChatView, setShowChatView] = useState(false); // For mobile navigation
+  const [pendingAttachments, setPendingAttachments] = useState<FileAttachment[]>([]);
   const queryClient = useQueryClient();
 
   const { data: contacts = [], isLoading, error } = useQuery<ChatContact[]>({
@@ -124,7 +128,8 @@ const Chat = () => {
               text: data.content || "",
               sender: data.sender_id === user.uid ? "user" : "other",
               timestamp: data.created_at ? new Date(data.created_at.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "",
-              sender_id: data.sender_id
+              sender_id: data.sender_id,
+              attachments: data.attachments || []
             };
           });
           setMessages(newMessages);
@@ -150,17 +155,18 @@ const Chat = () => {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!messageText.trim() || !selectedContactId) return;
+    if ((!messageText.trim() && pendingAttachments.length === 0) || !selectedContactId) return;
     
     try {
       const user = getCurrentUser();
       if (!user) throw new Error("Not authenticated");
       
-      // Call sendMessage with the correct parameter structure
-      await sendMessage(selectedContactId, messageText, user.uid);
+      // Call sendMessage with attachments
+      await sendMessage(selectedContactId, messageText, user.uid, pendingAttachments);
       
-      // Clear the input
+      // Clear the input and attachments
       setMessageText("");
+      setPendingAttachments([]);
       
       // Invalidate queries to refresh chat list
       queryClient.invalidateQueries({ queryKey: ['chats'] });
@@ -172,6 +178,14 @@ const Chat = () => {
       });
       console.error(err);
     }
+  };
+
+  const handleFilesUploaded = (attachments: FileAttachment[]) => {
+    setPendingAttachments(prev => [...prev, ...attachments]);
+  };
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.id !== attachmentId));
   };
 
   const handleTabClick = (contactId: string) => {
@@ -364,7 +378,18 @@ const Chat = () => {
                                 : "bg-white border border-gray-200"
                             }`}
                           >
-                            <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                            {message.text && (
+                              <p className="text-sm leading-relaxed break-words">{message.text}</p>
+                            )}
+                            
+                            {/* Render attachments */}
+                            {message.attachments && message.attachments.length > 0 && (
+                              <MessageAttachments 
+                                attachments={message.attachments}
+                                isOwnMessage={message.sender === "user"}
+                              />
+                            )}
+                            
                             <p className={`text-xs mt-2 ${
                               message.sender === "user"
                                 ? "text-white/80"
@@ -389,7 +414,30 @@ const Chat = () => {
                   </div>
 
                   {/* Message Input */}
-                  <div className="p-4 border-t border-border bg-white">
+                  <div className="p-4 border-t border-border bg-white space-y-3">
+                    {/* File Upload Component */}
+                    {selectedContact && (
+                      <FileUpload
+                        chatId={selectedContactId!}
+                        userId={getCurrentUser()?.uid || ""}
+                        onFilesUploaded={handleFilesUploaded}
+                        disabled={isLoadingMessages}
+                      />
+                    )}
+
+                    {/* Pending Attachments Preview */}
+                    {pendingAttachments.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Ready to send ({pendingAttachments.length} file{pendingAttachments.length > 1 ? 's' : ''}):
+                        </p>
+                        <MessageAttachments 
+                          attachments={pendingAttachments}
+                          isOwnMessage={false}
+                        />
+                      </div>
+                    )}
+
                     <form onSubmit={handleSendMessage} className="flex gap-3">
                       <Input
                         value={messageText}
@@ -399,7 +447,7 @@ const Chat = () => {
                       />
                       <Button 
                         type="submit" 
-                        disabled={!messageText.trim()} 
+                        disabled={!messageText.trim() && pendingAttachments.length === 0} 
                         className="bg-bookswap-darkblue hover:bg-bookswap-darkblue/90 rounded-full px-6"
                       >
                         <ArrowRight className="h-4 w-4" />

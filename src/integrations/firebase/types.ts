@@ -47,6 +47,15 @@ export interface Chat {
   user_id: string;
 }
 
+export interface FileAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  downloadUrl?: string;
+}
+
 export interface Message {
   chat_id: string;
   created_at: string;
@@ -54,6 +63,7 @@ export interface Message {
   sender: string;
   text: string;
   timestamp: string;
+  attachments?: FileAttachment[];
 }
 
 export interface Profile {

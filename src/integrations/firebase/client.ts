@@ -319,7 +319,7 @@ export const getMessages = async (chatId) => {
   }
 };
 
-export const sendMessage = async (chatId, content, senderId) => {
+export const sendMessage = async (chatId, content, senderId, attachments = []) => {
   try {
     const user = auth.currentUser;
     if (!user) throw new Error("User not authenticated");
@@ -329,15 +329,24 @@ export const sendMessage = async (chatId, content, senderId) => {
       content: content,
       sender_id: senderId || user.uid,
       sender_name: user.displayName || "Anonymous",
-      created_at: serverTimestamp()
+      created_at: serverTimestamp(),
+      attachments: attachments
     };
     
     const docRef = await addDoc(collection(db, COLLECTIONS.MESSAGES), messageData);
     
+    // Update last message text - show attachment info if no text content
+    let lastMessageText = content;
+    if (!content && attachments.length > 0) {
+      lastMessageText = `📎 ${attachments.length} file${attachments.length > 1 ? 's' : ''}`;
+    } else if (content && attachments.length > 0) {
+      lastMessageText = `${content} 📎`;
+    }
+    
     const chatRef = doc(db, COLLECTIONS.CHATS, chatId);
     await updateDoc(chatRef, {
       updated_at: serverTimestamp(),
-      last_message: content
+      last_message: lastMessageText
     });
     
     return { id: docRef.id, ...messageData };

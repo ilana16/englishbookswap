@@ -94,25 +94,46 @@ export function BookCard({ book, onRequestSwap, isLoadingSwap = false }: BookCar
       onRequestSwap(book.id, book.owner.id);
     }
   };
+
+  const handleBookClick = () => {
+    if (book.google_books_id) {
+      // Open Google Books page for this specific book
+      window.open(`https://books.google.com/books?id=${book.google_books_id}`, '_blank');
+    } else {
+      // Fallback: search Google Books with title and author
+      const searchQuery = encodeURIComponent(`${book.title} ${book.author}`);
+      window.open(`https://books.google.com/books?q=${searchQuery}`, '_blank');
+    }
+  };
   
   return (
     <Card className="h-full flex flex-col">
       {coverImage ? (
         <div 
-          className="w-full h-48 bg-cover bg-center rounded-t-lg"
+          className="w-full h-48 bg-cover bg-center rounded-t-lg cursor-pointer hover:opacity-90 transition-opacity"
           style={{ backgroundImage: `url(${coverImage})` }}
+          onClick={handleBookClick}
+          title="View on Google Books"
         />
       ) : (
         <div 
-          className="w-full h-48 p-4 flex flex-col justify-center items-center text-center rounded-t-lg"
+          className="w-full h-48 p-4 flex flex-col justify-center items-center text-center rounded-t-lg cursor-pointer hover:opacity-90 transition-opacity"
           style={{ backgroundColor: book.coverColor }}
+          onClick={handleBookClick}
+          title="View on Google Books"
         >
           <h3 className="font-bold text-white">{book.title}</h3>
           <p className="text-sm text-white/80">{book.author}</p>
         </div>
       )}
       <CardContent className="flex-grow p-4">
-        <h3 className="font-bold text-lg mb-1">{book.title}</h3>
+        <h3 
+          className="font-bold text-lg mb-1 cursor-pointer hover:text-primary transition-colors"
+          onClick={handleBookClick}
+          title="View on Google Books"
+        >
+          {book.title}
+        </h3>
         <p className="text-sm font-medium mb-2">{book.author}</p>
         <p className="text-xs text-muted-foreground mb-2">
           Condition: {book.condition}

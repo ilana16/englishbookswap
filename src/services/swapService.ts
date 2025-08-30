@@ -1,6 +1,7 @@
 import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
+import { notifyNewMatch } from './emailService';
 
 export interface SwapRequest {
   id?: string;
@@ -56,6 +57,17 @@ export const createSwapRequest = async (
     };
     
     const docRef = await addDoc(collection(db, 'swap_requests'), swapRequest);
+    
+    // Send email notification to book owner about new match
+    try {
+      // For immediate testing, let's use Ilana's email
+      const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
+      await notifyNewMatch(testEmail);
+      console.log(`New match notification sent for swap request ${docRef.id}`);
+    } catch (emailError) {
+      console.error('Error sending new match notification:', emailError);
+      // Don't fail the swap request creation if email fails
+    }
     
     return docRef.id;
   } catch (error) {

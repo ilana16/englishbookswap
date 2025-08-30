@@ -14,6 +14,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
+import { notifyBookAvailability } from "@/services/emailService";
 
 const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
 const noPreferenceCondition = "No Preference";
@@ -151,6 +152,17 @@ const AddBook = () => {
           }
         };
         const bookId = await addBook(bookWithOwner);
+        
+        // Send email notification to users who want this book
+        try {
+          // For immediate testing, let's use Ilana's email
+          const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
+          await notifyBookAvailability(testEmail);
+          console.log(`Book availability notification sent for book: ${bookData.title}`);
+        } catch (emailError) {
+          console.error('Error sending book availability notification:', emailError);
+          // Don't fail the book addition if email fails
+        }
         
         toast.success("Book added to your collection!");
       } else {

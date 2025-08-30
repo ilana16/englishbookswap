@@ -1,57 +1,74 @@
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/integrations/firebase/config';
+// Email service that calls the deployed Flask email service
+const EMAIL_SERVICE_URL = 'https://77h9ikc6jdlv.manus.space/api/email';
 
-// Simple email notification service with exact messages as specified
-export const sendEmailNotification = async (
-  recipientEmail: string,
-  subject: string,
-  message: string
-): Promise<boolean> => {
+interface EmailResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
+const callEmailService = async (endpoint: string, email: string): Promise<boolean> => {
   try {
-    // Write to mail collection - Firebase extension will automatically send the email
-    const mailDoc = {
-      to: [recipientEmail],
-      message: {
-        subject: subject,
-        text: message,
-        html: `<p>${message}</p>`
+    const response = await fetch(`${EMAIL_SERVICE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      created_at: serverTimestamp()
-    };
+      body: JSON.stringify({ email }),
+    });
+
+    const data: EmailResponse = await response.json();
     
-    await addDoc(collection(db, 'mail'), mailDoc);
-    console.log(`Email notification sent to: ${recipientEmail}`);
-    return true;
+    if (data.success) {
+      console.log(`Email notification sent successfully: ${data.message}`);
+      return true;
+    } else {
+      console.error(`Failed to send email notification: ${data.error || data.message}`);
+      return false;
+    }
   } catch (error) {
-    console.error('Error sending email notification:', error);
+    console.error('Error calling email service:', error);
     return false;
   }
 };
 
-// 1. New match notification
 export const notifyNewMatch = async (recipientEmail: string): Promise<boolean> => {
-  return await sendEmailNotification(
-    recipientEmail,
-    'New Book Match',
-    'You have a new book match.'
-  );
+  console.log(`Sending new match notification to: ${recipientEmail}`);
+  return await callEmailService('/send-new-match', recipientEmail);
 };
 
-// 2. Book availability notification
 export const notifyBookAvailability = async (recipientEmail: string): Promise<boolean> => {
-  return await sendEmailNotification(
-    recipientEmail,
-    'Book Available',
-    'A book you want is available.'
-  );
+  console.log(`Sending book availability notification to: ${recipientEmail}`);
+  return await callEmailService('/send-book-available', recipientEmail);
 };
 
-// 3. New message notification
 export const notifyNewMessage = async (recipientEmail: string): Promise<boolean> => {
-  return await sendEmailNotification(
-    recipientEmail,
-    'New Message',
-    'You have a new book swap message.'
-  );
+  console.log(`Sending new message notification to: ${recipientEmail}`);
+  return await callEmailService('/send-new-message', recipientEmail);
+};
+
+export const testEmail = async (recipientEmail: string, testType: string = 'test'): Promise<boolean> => {
+  try {
+    const response = await fetch(`${EMAIL_SERVICE_URL}/test-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: recipientEmail, testType }),
+    });
+
+    const data: EmailResponse = await response.json();
+    
+    if (data.success) {
+      console.log(`Test email sent successfully: ${data.message}`);
+      return true;
+    } else {
+      console.error(`Failed to send test email: ${data.error || data.message}`);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error sending test email:', error);
+    return false;
+  }
 };
 

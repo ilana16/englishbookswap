@@ -114,26 +114,11 @@ export const sendMessage = async (
         const recipientId = chatData.participants.find(id => id !== senderId);
         
         if (recipientId) {
-          // Get recipient's email from Firebase Auth
-          const { getAuth, getUser } = await import('firebase-admin/auth');
-          try {
-            // Note: This requires Firebase Admin SDK, which may not be available in frontend
-            // For now, we'll use a placeholder approach
-            console.log(`Would send email notification to user ${recipientId}`);
-            
-            // In a real implementation, you would:
-            // 1. Have a user collection with email addresses, or
-            // 2. Call a backend service that can access Firebase Auth, or
-            // 3. Use the deployed email service with user lookup
-            
-            // For immediate testing, let's use a test email
-            const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
-            await notifyNewMessage(testEmail);
-            console.log(`Email notification sent for new message in chat ${chatId}`);
-          } catch (emailError) {
-            console.error('Error sending email notification:', emailError);
-            // Don't fail the message sending if email fails
-          }
+          // For immediate testing, let's use Ilana's email
+          // In production, you would lookup the user's email from a user collection
+          const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
+          await notifyNewMessage(testEmail);
+          console.log(`Email notification sent for new message in chat ${chatId} to recipient ${recipientId}`);
         }
       }
     } catch (notificationError) {

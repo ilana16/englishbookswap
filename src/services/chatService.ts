@@ -12,8 +12,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
-import { notifyNewMessage } from './emailService';
 import { shouldSendNotification } from '@/utils/notificationHelper';
+import { sendNotificationWithFallback } from '@/utils/notificationFallback';
 
 export interface ChatData {
   id?: string;
@@ -118,12 +118,8 @@ export const sendMessage = async (
           // Check if recipient wants to receive message notifications
           const { shouldSend, email } = await shouldSendNotification(recipientId, 'new_messages');
           
-          if (shouldSend && email) {
-            await notifyNewMessage(email);
-            console.log(`Email notification sent for new message in chat ${chatId} to recipient ${recipientId} at ${email}`);
-          } else {
-            console.log(`Skipping email notification for user ${recipientId} - notifications disabled or no email`);
-          }
+          // Use fallback system to ensure notifications work
+          await sendNotificationWithFallback('new_messages', email, shouldSend, recipientId);
         }
       }
     } catch (notificationError) {

@@ -70,12 +70,19 @@ export const shouldSendNotification = async (
   notificationType: keyof NotificationPreferences
 ): Promise<{ shouldSend: boolean; email: string | null }> => {
   try {
+    console.log(`Checking notification preferences for user ${userId}, type: ${notificationType}`);
+    
     const [preferences, email] = await Promise.all([
       getUserNotificationPreferences(userId),
       getUserEmail(userId)
     ]);
     
+    console.log(`User ${userId} preferences:`, preferences);
+    console.log(`User ${userId} email:`, email);
+    
     const shouldSend = preferences[notificationType] && email !== null;
+    
+    console.log(`Should send ${notificationType} notification to ${userId}: ${shouldSend}`);
     
     return {
       shouldSend,

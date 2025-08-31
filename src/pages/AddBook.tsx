@@ -14,8 +14,8 @@ import { useAuth } from "@/components/AuthProvider";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
-import { notifyBookAvailability } from "@/services/emailService";
 import { shouldSendNotification } from "@/utils/notificationHelper";
+import { sendNotificationWithFallback } from "@/utils/notificationFallback";
 
 const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
 const noPreferenceCondition = "No Preference";
@@ -176,12 +176,8 @@ const AddBook = () => {
             // Check if user wants book availability notifications
             const { shouldSend, email } = await shouldSendNotification(userId, 'book_availability');
             
-            if (shouldSend && email) {
-              await notifyBookAvailability(email);
-              console.log(`Book availability notification sent to user ${userId} at ${email} for book: ${bookData.title}`);
-            } else {
-              console.log(`Skipping book availability notification for user ${userId} - notifications disabled or no email`);
-            }
+            // Use fallback system to ensure notifications work
+            await sendNotificationWithFallback('book_availability', email, shouldSend, userId);
           }
         } catch (emailError) {
           console.error('Error sending book availability notifications:', emailError);

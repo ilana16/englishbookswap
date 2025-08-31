@@ -13,6 +13,7 @@ import {
 import { db, auth } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
 import { notifyNewMessage } from './emailService';
+import { shouldSendNotification } from '@/utils/notificationHelper';
 
 export interface ChatData {
   id?: string;
@@ -105,7 +106,7 @@ export const sendMessage = async (
     
     const docRef = await addDoc(collection(db, 'messages'), messageData);
     
-    // Send email notification to recipient
+    // Send email notification to recipient if they have notifications enabled
     try {
       // Get chat data to find recipient
       const chatDoc = await getDoc(doc(db, 'chats', chatId));
@@ -114,11 +115,15 @@ export const sendMessage = async (
         const recipientId = chatData.participants.find(id => id !== senderId);
         
         if (recipientId) {
-          // For immediate testing, let's use Ilana's email
-          // In production, you would lookup the user's email from a user collection
-          const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
-          await notifyNewMessage(testEmail);
-          console.log(`Email notification sent for new message in chat ${chatId} to recipient ${recipientId}`);
+          // Check if recipient wants to receive message notifications
+          const { shouldSend, email } = await shouldSendNotification(recipientId, 'new_messages');
+          
+          if (shouldSend && email) {
+            await notifyNewMessage(email);
+            console.log(`Email notification sent for new message in chat ${chatId} to recipient ${recipientId} at ${email}`);
+          } else {
+            console.log(`Skipping email notification for user ${recipientId} - notifications disabled or no email`);
+          }
         }
       }
     } catch (notificationError) {

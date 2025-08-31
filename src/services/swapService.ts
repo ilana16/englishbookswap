@@ -1,7 +1,8 @@
-import { collection, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
 import { notifyNewMatch } from './emailService';
+import { shouldSendNotification } from '@/utils/notificationHelper';
 
 export interface SwapRequest {
   id?: string;
@@ -58,12 +59,17 @@ export const createSwapRequest = async (
     
     const docRef = await addDoc(collection(db, 'swap_requests'), swapRequest);
     
-    // Send email notification to book owner about new match
+    // Send email notification to book owner about new match if they have notifications enabled
     try {
-      // For immediate testing, let's use Ilana's email
-      const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
-      await notifyNewMatch(testEmail);
-      console.log(`New match notification sent for swap request ${docRef.id}`);
+      // Check if owner wants to receive match notifications
+      const { shouldSend, email } = await shouldSendNotification(ownerId, 'new_matches');
+      
+      if (shouldSend && email) {
+        await notifyNewMatch(email);
+        console.log(`New match notification sent for swap request ${docRef.id} to owner ${ownerId} at ${email}`);
+      } else {
+        console.log(`Skipping new match notification for user ${ownerId} - notifications disabled or no email`);
+      }
     } catch (emailError) {
       console.error('Error sending new match notification:', emailError);
       // Don't fail the swap request creation if email fails

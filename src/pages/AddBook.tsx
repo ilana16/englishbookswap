@@ -11,10 +11,11 @@ import { Search, Loader2, BookOpen, BookPlus } from "lucide-react";
 import { GoogleBook, searchBooks } from "@/services/googleBooks";
 import { addBook, addWantedBook } from "@/integrations/firebase/client";
 import { useAuth } from "@/components/AuthProvider";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { notifyBookAvailability } from "@/services/emailService";
+import { shouldSendNotification } from "@/utils/notificationHelper";
 
 const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
 const noPreferenceCondition = "No Preference";
@@ -153,14 +154,37 @@ const AddBook = () => {
         };
         const bookId = await addBook(bookWithOwner);
         
-        // Send email notification to users who want this book
+        // Send email notification to users who want this book and have notifications enabled
         try {
-          // For immediate testing, let's use Ilana's email
-          const testEmail = 'ilana.cunningham16@gmail.com'; // Ilana's email for testing
-          await notifyBookAvailability(testEmail);
-          console.log(`Book availability notification sent for book: ${bookData.title}`);
+          // Find users who want this book in the same neighborhood
+          const wantedBooksQuery = query(
+            collection(db, COLLECTIONS.WANTED_BOOKS),
+            where("title", "==", selectedBook.volumeInfo.title),
+            where("neighborhood", "==", userNeighborhood)
+          );
+          
+          const wantedBooksSnapshot = await getDocs(wantedBooksQuery);
+          
+          // Send notifications to each user who wants this book
+          for (const wantedBookDoc of wantedBooksSnapshot.docs) {
+            const wantedBookData = wantedBookDoc.data();
+            const userId = wantedBookData.user_id;
+            
+            // Skip if it's the same user adding the book
+            if (userId === user?.uid) continue;
+            
+            // Check if user wants book availability notifications
+            const { shouldSend, email } = await shouldSendNotification(userId, 'book_availability');
+            
+            if (shouldSend && email) {
+              await notifyBookAvailability(email);
+              console.log(`Book availability notification sent to user ${userId} at ${email} for book: ${bookData.title}`);
+            } else {
+              console.log(`Skipping book availability notification for user ${userId} - notifications disabled or no email`);
+            }
+          }
         } catch (emailError) {
-          console.error('Error sending book availability notification:', emailError);
+          console.error('Error sending book availability notifications:', emailError);
           // Don't fail the book addition if email fails
         }
         

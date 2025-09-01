@@ -47,28 +47,3 @@ export const notifyNewMessage = async (recipientEmail: string): Promise<boolean>
   return await callEmailService('/send-new-message', recipientEmail);
 };
 
-export const testEmail = async (recipientEmail: string, testType: string = 'test'): Promise<boolean> => {
-  try {
-    const response = await fetch(`${EMAIL_SERVICE_URL}/test-email`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email: recipientEmail, testType }),
-    });
-
-    const data: EmailResponse = await response.json();
-    
-    if (data.success) {
-      console.log(`Test email sent successfully: ${data.message}`);
-      return true;
-    } else {
-      console.error(`Failed to send test email: ${data.error || data.message}`);
-      return false;
-    }
-  } catch (error) {
-    console.error('Error sending test email:', error);
-    return false;
-  }
-};
-

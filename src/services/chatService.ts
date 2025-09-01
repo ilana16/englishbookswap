@@ -13,7 +13,7 @@ import {
 import { db, auth } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
 import { shouldSendNotification } from '@/utils/notificationHelper';
-import { sendNotificationWithFallback } from '@/utils/notificationService';
+import { sendImmediateNotification } from '@/utils/immediateNotificationService';
 
 export interface ChatData {
   id?: string;
@@ -118,8 +118,14 @@ export const sendMessage = async (
           // Check if recipient wants to receive message notifications
           const { shouldSend, email } = await shouldSendNotification(recipientId, 'new_messages');
           
-          // Use fallback system to ensure notifications work
-          await sendNotificationWithFallback('new_messages', email, shouldSend, recipientId);
+          // Use immediate notification system for instant delivery
+          const notificationSent = await sendImmediateNotification('new_messages', email, shouldSend, recipientId);
+          
+          if (notificationSent) {
+            console.log(`🚀 Immediate message notification sent to user ${recipientId}`);
+          } else {
+            console.warn(`⚠️ Failed to send immediate message notification to user ${recipientId}`);
+          }
         }
       }
     } catch (notificationError) {

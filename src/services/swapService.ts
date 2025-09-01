@@ -2,7 +2,7 @@ import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'fir
 import { db } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
 import { shouldSendNotification } from '@/utils/notificationHelper';
-import { sendNotificationWithFallback } from '@/utils/notificationService';
+import { sendImmediateNotification } from '@/utils/immediateNotificationService';
 
 export interface SwapRequest {
   id?: string;
@@ -64,8 +64,14 @@ export const createSwapRequest = async (
       // Check if owner wants to receive match notifications
       const { shouldSend, email } = await shouldSendNotification(ownerId, 'new_matches');
       
-      // Use fallback system to ensure notifications work
-      await sendNotificationWithFallback('new_matches', email, shouldSend, ownerId);
+      // Use immediate notification system for instant delivery
+      const notificationSent = await sendImmediateNotification('new_matches', email, shouldSend, ownerId);
+      
+      if (notificationSent) {
+        console.log(`🚀 Immediate match notification sent to owner ${ownerId}`);
+      } else {
+        console.warn(`⚠️ Failed to send immediate match notification to owner ${ownerId}`);
+      }
     } catch (emailError) {
       console.error('Error sending new match notification:', emailError);
       // Don't fail the swap request creation if email fails

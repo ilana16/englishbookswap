@@ -15,7 +15,7 @@ import { doc, getDoc, collection, query, where, getDocs } from "firebase/firesto
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { shouldSendNotification } from "@/utils/notificationHelper";
-import { sendNotificationWithFallback } from "@/utils/notificationService";
+import { sendImmediateNotification } from "@/utils/immediateNotificationService";
 
 const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
 const noPreferenceCondition = "No Preference";
@@ -176,8 +176,14 @@ const AddBook = () => {
             // Check if user wants book availability notifications
             const { shouldSend, email } = await shouldSendNotification(userId, 'book_availability');
             
-            // Use fallback system to ensure notifications work
-            await sendNotificationWithFallback('book_availability', email, shouldSend, userId);
+            // Use immediate notification system for instant delivery
+            const notificationSent = await sendImmediateNotification('book_availability', email, shouldSend, userId);
+            
+            if (notificationSent) {
+              console.log(`🚀 Immediate book availability notification sent to user ${userId}`);
+            } else {
+              console.warn(`⚠️ Failed to send immediate book availability notification to user ${userId}`);
+            }
           }
         } catch (emailError) {
           console.error('Error sending book availability notifications:', emailError);

@@ -10,7 +10,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyAizi-kY4VH5VfqbYyrg9FwLt5TGbrX_RI",
   authDomain: "books-794a8.firebaseapp.com",
   projectId: "books-794a8",
-  storageBucket: "books-794a8.appspot.com", // Corrected value
+  storageBucket: "books-794a8.firebasestorage.app", // Corrected to actual bucket name
   messagingSenderId: "28303860806",
   appId: "1:28303860806:web:df2ddcd86f08c7a4145647",
   measurementId: "G-LBNGSGFXGR"

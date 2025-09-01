@@ -1,4 +1,4 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '@/integrations/firebase/config';
 import { FileAttachment } from '@/integrations/firebase/types';
 
@@ -50,7 +50,7 @@ export const validateFiles = (files: File[]): { valid: boolean; error?: string }
   if (files.length > MAX_FILES_PER_MESSAGE) {
     return {
       valid: false,
-      error: `You can only upload up to ${MAX_FILES_PER_MESSAGE} files per message.`
+      error: `Too many files. Maximum ${MAX_FILES_PER_MESSAGE} files allowed per message.`
     };
   }
 
@@ -89,35 +89,79 @@ export const uploadFile = async (
 
     const storageRef = ref(storage, filePath);
     
-    // Upload file
-    const snapshot = await uploadBytes(storageRef, file);
-    
-    onProgress?.({
-      fileId,
-      progress: 50,
-      status: 'uploading'
-    });
-
-    // Get download URL
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-    
-    onProgress?.({
-      fileId,
-      progress: 100,
-      status: 'completed'
-    });
-
-    const attachment: FileAttachment = {
-      id: fileId,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      url: filePath,
-      downloadUrl
+    // Upload file with metadata to help with CORS
+    const metadata = {
+      contentType: file.type,
+      customMetadata: {
+        'uploadedBy': userId,
+        'chatId': chatId,
+        'originalName': file.name
+      }
     };
+    
+    // Use uploadBytesResumable for better progress tracking and error handling
+    const uploadTask = uploadBytesResumable(storageRef, file, metadata);
+    
+    return new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          // Progress tracking
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          onProgress?.({
+            fileId,
+            progress: Math.round(progress),
+            status: 'uploading'
+          });
+        },
+        (error) => {
+          // Handle upload errors
+          console.error('Upload error:', error);
+          onProgress?.({
+            fileId,
+            progress: 0,
+            status: 'error',
+            error: `Upload failed: ${error.message}`
+          });
+          reject(new Error(`Upload failed: ${error.message}`));
+        },
+        async () => {
+          // Upload completed successfully
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            
+            onProgress?.({
+              fileId,
+              progress: 100,
+              status: 'completed'
+            });
 
-    return attachment;
+            const attachment: FileAttachment = {
+              id: fileId,
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              url: downloadURL,
+              path: filePath,
+              uploadedAt: new Date(),
+              uploadedBy: userId
+            };
+
+            resolve(attachment);
+          } catch (urlError) {
+            console.error('Error getting download URL:', urlError);
+            onProgress?.({
+              fileId,
+              progress: 0,
+              status: 'error',
+              error: 'Failed to get download URL'
+            });
+            reject(new Error('Failed to get download URL'));
+          }
+        }
+      );
+    });
   } catch (error) {
+    console.error('File upload error:', error);
     onProgress?.({
       fileId,
       progress: 0,

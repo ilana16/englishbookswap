@@ -4,13 +4,22 @@ import { FileAttachment } from '@/integrations/firebase/types';
  * Enhanced file download utility that handles different file types and browsers
  */
 export const downloadFile = async (attachment: FileAttachment): Promise<void> => {
-  if (!attachment.downloadUrl) {
+  const fileUrl = attachment.url || attachment.downloadUrl;
+  
+  if (!fileUrl) {
     throw new Error('No download URL available for this file');
   }
 
   try {
-    // For modern browsers, use fetch to download the file
-    const response = await fetch(attachment.downloadUrl);
+    // For modern browsers, use fetch to download the file with CORS handling
+    const response = await fetch(fileUrl, {
+      method: 'GET',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: {
+        'Accept': '*/*'
+      }
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to download file: ${response.statusText}`);
@@ -41,7 +50,7 @@ export const downloadFile = async (attachment: FileAttachment): Promise<void> =>
     // Fallback: use direct link download
     try {
       const link = document.createElement('a');
-      link.href = attachment.downloadUrl;
+      link.href = fileUrl;
       link.download = attachment.name;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -52,7 +61,7 @@ export const downloadFile = async (attachment: FileAttachment): Promise<void> =>
     } catch (fallbackError) {
       console.error('Fallback download also failed:', fallbackError);
       // Last resort: open in new tab
-      window.open(attachment.downloadUrl, '_blank');
+      window.open(fileUrl, '_blank');
     }
   }
 };
@@ -99,8 +108,9 @@ export const canPreviewInBrowser = (fileType: string): boolean => {
  * Open file in new tab for preview
  */
 export const previewFile = (attachment: FileAttachment): void => {
-  if (attachment.downloadUrl) {
-    window.open(attachment.downloadUrl, '_blank', 'noopener,noreferrer');
+  const fileUrl = attachment.url || attachment.downloadUrl;
+  if (fileUrl) {
+    window.open(fileUrl, '_blank', 'noopener,noreferrer');
   }
 };
 
@@ -108,16 +118,18 @@ export const previewFile = (attachment: FileAttachment): void => {
  * Copy file URL to clipboard
  */
 export const copyFileUrl = async (attachment: FileAttachment): Promise<void> => {
-  if (!attachment.downloadUrl) {
+  const fileUrl = attachment.url || attachment.downloadUrl;
+  
+  if (!fileUrl) {
     throw new Error('No URL available for this file');
   }
 
   try {
-    await navigator.clipboard.writeText(attachment.downloadUrl);
+    await navigator.clipboard.writeText(fileUrl);
   } catch (error) {
     // Fallback for older browsers
     const textArea = document.createElement('textarea');
-    textArea.value = attachment.downloadUrl;
+    textArea.value = fileUrl;
     textArea.style.position = 'fixed';
     textArea.style.opacity = '0';
     document.body.appendChild(textArea);

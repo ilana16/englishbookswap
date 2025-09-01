@@ -7,29 +7,23 @@ interface EmailResponse {
   error?: string;
 }
 
-interface EmailNotificationData {
-  email: string;
-  subject: string;
-  message: string;
-}
-
-const callEmailService = async (endpoint: string, data: EmailNotificationData): Promise<boolean> => {
+const callEmailService = async (endpoint: string, email: string): Promise<boolean> => {
   try {
     const response = await fetch(`${EMAIL_SERVICE_URL}${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ email }),
     });
 
-    const responseData: EmailResponse = await response.json();
+    const data: EmailResponse = await response.json();
     
-    if (responseData.success) {
-      console.log(`Email notification sent successfully: ${responseData.message}`);
+    if (data.success) {
+      console.log(`Email notification sent successfully: ${data.message}`);
       return true;
     } else {
-      console.error(`Failed to send email notification: ${responseData.error || responseData.message}`);
+      console.error(`Failed to send email notification: ${data.error || data.message}`);
       return false;
     }
   } catch (error) {
@@ -40,32 +34,17 @@ const callEmailService = async (endpoint: string, data: EmailNotificationData): 
 
 export const notifyNewMatch = async (recipientEmail: string): Promise<boolean> => {
   console.log(`Sending new match notification to: ${recipientEmail}`);
-  const emailData: EmailNotificationData = {
-    email: recipientEmail,
-    subject: "You have a new match - English Book Swap",
-    message: "You have a new match."
-  };
-  return await callEmailService('/send-notification', emailData);
+  return await callEmailService('/send-new-match', recipientEmail);
 };
 
 export const notifyBookAvailability = async (recipientEmail: string): Promise<boolean> => {
   console.log(`Sending book availability notification to: ${recipientEmail}`);
-  const emailData: EmailNotificationData = {
-    email: recipientEmail,
-    subject: "A book you want is available - English Book Swap",
-    message: "A book you want is available."
-  };
-  return await callEmailService('/send-notification', emailData);
+  return await callEmailService('/send-book-available', recipientEmail);
 };
 
 export const notifyNewMessage = async (recipientEmail: string): Promise<boolean> => {
   console.log(`Sending new message notification to: ${recipientEmail}`);
-  const emailData: EmailNotificationData = {
-    email: recipientEmail,
-    subject: "You have a new book swap message - English Book Swap",
-    message: "You have a new book swap message."
-  };
-  return await callEmailService('/send-notification', emailData);
+  return await callEmailService('/send-new-message', recipientEmail);
 };
 
 export const testEmail = async (recipientEmail: string, testType: string = 'test'): Promise<boolean> => {

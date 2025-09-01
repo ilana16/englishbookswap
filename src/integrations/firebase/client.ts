@@ -23,6 +23,8 @@ import {
 } from "firebase/auth";
 import { db, auth } from "./config";
 import { COLLECTIONS } from "./types";
+import { shouldSendNotification } from "@/utils/notificationHelper";
+import { sendImmediateNotification } from "@/utils/immediateNotificationService";
 
 // Function to add a book the user has
 export const addBook = async (bookData) => {
@@ -348,6 +350,43 @@ export const sendMessage = async (chatId, content, senderId, attachments = []) =
       updated_at: serverTimestamp(),
       last_message: lastMessageText
     });
+    
+    // Send email notification to recipient if they have notifications enabled
+    try {
+      console.log('🚀 Processing email notification for new message...');
+      
+      // Get chat data to find recipient
+      const chatDoc = await getDoc(chatRef);
+      if (chatDoc.exists()) {
+        const chatData = chatDoc.data();
+        const recipientId = chatData.participants?.find(id => id !== (senderId || user.uid));
+        
+        if (recipientId) {
+          console.log(`📧 Found recipient: ${recipientId}, checking notification preferences...`);
+          
+          // Check if recipient wants to receive message notifications
+          const { shouldSend, email } = await shouldSendNotification(recipientId, 'new_messages');
+          
+          console.log(`📋 Notification check: shouldSend=${shouldSend}, email=${email}`);
+          
+          // Use immediate notification system for instant delivery
+          const notificationSent = await sendImmediateNotification('new_messages', email, shouldSend, recipientId);
+          
+          if (notificationSent) {
+            console.log(`✅ Immediate message notification sent to user ${recipientId}`);
+          } else {
+            console.warn(`⚠️ Failed to send immediate message notification to user ${recipientId}`);
+          }
+        } else {
+          console.warn('⚠️ No recipient found in chat participants');
+        }
+      } else {
+        console.warn('⚠️ Chat document not found');
+      }
+    } catch (notificationError) {
+      console.error('💥 Error processing email notification:', notificationError);
+      // Don't fail the message sending if notification fails
+    }
     
     return { id: docRef.id, ...messageData };
   } catch (error) {

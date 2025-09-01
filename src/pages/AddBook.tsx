@@ -15,7 +15,7 @@ import { doc, getDoc, collection, query, where, getDocs } from "firebase/firesto
 import { db } from "@/integrations/firebase/config";
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { shouldSendNotification } from "@/utils/notificationHelper";
-import { sendNotificationWithFallback } from "@/utils/notificationFallback";
+import { sendNotificationWithFallback } from "@/utils/notificationService";
 
 const baseConditions = ["Like New", "Very Good", "Good", "Fair", "Poor"];
 const noPreferenceCondition = "No Preference";

@@ -2,7 +2,7 @@ import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'fir
 import { db } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
 import { shouldSendNotification } from '@/utils/notificationHelper';
-import { sendNotificationWithFallback } from '@/utils/notificationFallback';
+import { sendNotificationWithFallback } from '@/utils/notificationService';
 
 export interface SwapRequest {
   id?: string;

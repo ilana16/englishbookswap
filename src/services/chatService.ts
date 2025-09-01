@@ -13,7 +13,7 @@ import {
 import { db, auth } from '@/integrations/firebase/config';
 import { COLLECTIONS } from '@/integrations/firebase/types';
 import { shouldSendNotification } from '@/utils/notificationHelper';
-import { sendNotificationWithFallback } from '@/utils/notificationFallback';
+import { sendNotificationWithFallback } from '@/utils/notificationService';
 
 export interface ChatData {
   id?: string;

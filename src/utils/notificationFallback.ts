@@ -1,8 +1,8 @@
 import { notifyNewMessage, notifyNewMatch, notifyBookAvailability } from '@/services/emailService';
 
 /**
- * Fallback notification system that uses a test email when user preferences fail
- * This ensures notifications still work during development and testing
+ * Simplified notification system that ensures emails are always sent
+ * Uses user email if available and preferences allow, otherwise uses fallback
  */
 
 const FALLBACK_EMAIL = 'ilana.cunningham16@gmail.com';
@@ -14,33 +14,30 @@ export const sendNotificationWithFallback = async (
   userId: string
 ): Promise<void> => {
   try {
-    let emailToUse = userEmail;
+    // Always send notification - use user email if preferences allow, otherwise fallback
+    let emailToUse = (shouldSend && userEmail) ? userEmail : FALLBACK_EMAIL;
     
-    // If user preferences failed or email is missing, use fallback for testing
-    if (!shouldSend || !userEmail) {
-      console.log(`Using fallback email for ${notificationType} notification (user: ${userId})`);
-      emailToUse = FALLBACK_EMAIL;
-    }
-    
-    if (!emailToUse) {
-      console.log(`No email available for ${notificationType} notification (user: ${userId})`);
-      return;
-    }
+    console.log(`Sending ${notificationType} notification to ${emailToUse} (user: ${userId}, shouldSend: ${shouldSend})`);
     
     // Send the appropriate notification type
+    let success = false;
     switch (notificationType) {
       case 'new_messages':
-        await notifyNewMessage(emailToUse);
+        success = await notifyNewMessage(emailToUse);
         break;
       case 'new_matches':
-        await notifyNewMatch(emailToUse);
+        success = await notifyNewMatch(emailToUse);
         break;
       case 'book_availability':
-        await notifyBookAvailability(emailToUse);
+        success = await notifyBookAvailability(emailToUse);
         break;
     }
     
-    console.log(`${notificationType} notification sent to ${emailToUse} for user ${userId}`);
+    if (success) {
+      console.log(`✅ ${notificationType} notification sent successfully to ${emailToUse} for user ${userId}`);
+    } else {
+      console.error(`❌ Failed to send ${notificationType} notification to ${emailToUse} for user ${userId}`);
+    }
   } catch (error) {
     console.error(`Error sending ${notificationType} notification:`, error);
   }

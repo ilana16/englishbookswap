@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { COLLECTIONS, FileAttachment } from "@/integrations/firebase/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { FileUpload } from "@/components/chat/FileUpload";
 import { MessageAttachments } from "@/components/chat/MessageAttachments";
+import '@/utils/testNotifications'; // Import for debugging
 
 interface ChatContact {
   id: string;

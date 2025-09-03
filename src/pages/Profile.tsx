@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/components/AuthProvider";
-import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp } from "firebase/firestore"; // Added serverTimestamp
+import { doc, getDoc, updateDoc, setDoc, collection, query, where, getDocs, writeBatch, serverTimestamp, deleteDoc } from "firebase/firestore"; // Added deleteDoc
 import { db } from "@/integrations/firebase/config";
+import { deleteUser } from "firebase/auth"; // Added deleteUser import
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { NeighborhoodSelect } from "@/components/profile/NeighborhoodSelect";
 import { Button } from "@/components/ui/button";
@@ -136,6 +137,133 @@ export default function Profile() {
     }
   }
 
+  async function deleteAccount() {
+    if (!user) return;
+
+    // Show confirmation dialog
+    const confirmDelete = window.confirm(
+      "⚠️ WARNING: This action cannot be undone!\n\n" +
+      "Deleting your account will:\n" +
+      "• Remove all your books from the platform\n" +
+      "• Delete all your messages and chat history\n" +
+      "• Remove your profile permanently\n" +
+      "• Cancel any pending book swaps\n\n" +
+      "Are you absolutely sure you want to delete your account?"
+    );
+
+    if (!confirmDelete) return;
+
+    // Second confirmation
+    const finalConfirm = window.confirm(
+      "🚨 FINAL WARNING 🚨\n\n" +
+      "This is your last chance to cancel.\n" +
+      "Your account and ALL data will be permanently deleted.\n\n" +
+      "Type 'DELETE' in the next prompt to confirm."
+    );
+
+    if (!finalConfirm) return;
+
+    // Require typing DELETE
+    const deleteConfirmation = window.prompt(
+      "To confirm account deletion, please type 'DELETE' (all caps):"
+    );
+
+    if (deleteConfirmation !== "DELETE") {
+      toast.error("Account deletion cancelled. You must type 'DELETE' exactly.");
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      console.log("🗑️ Starting account deletion process...");
+      
+      // Create a batch for atomic operations
+      const batch = writeBatch(db);
+      
+      // 1. Delete all user's books
+      console.log("📚 Deleting user's books...");
+      const booksQuery = query(
+        collection(db, COLLECTIONS.BOOKS),
+        where("owner.id", "==", user.uid)
+      );
+      const booksSnapshot = await getDocs(booksQuery);
+      booksSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // 2. Delete all user's wanted books
+      console.log("📖 Deleting user's wanted books...");
+      const wantedBooksQuery = query(
+        collection(db, COLLECTIONS.WANTED_BOOKS),
+        where("user_id", "==", user.uid)
+      );
+      const wantedBooksSnapshot = await getDocs(wantedBooksQuery);
+      wantedBooksSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // 3. Delete all user's messages
+      console.log("💬 Deleting user's messages...");
+      const messagesQuery = query(
+        collection(db, COLLECTIONS.MESSAGES),
+        where("sender_id", "==", user.uid)
+      );
+      const messagesSnapshot = await getDocs(messagesQuery);
+      messagesSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // 4. Delete user's chats (where they are a participant)
+      console.log("🗨️ Deleting user's chats...");
+      const chatsQuery = query(
+        collection(db, COLLECTIONS.CHATS),
+        where("participants", "array-contains", user.uid)
+      );
+      const chatsSnapshot = await getDocs(chatsQuery);
+      chatsSnapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+      
+      // 5. Delete user's profile
+      console.log("👤 Deleting user profile...");
+      const profileRef = doc(db, COLLECTIONS.PROFILES, user.uid);
+      batch.delete(profileRef);
+      
+      // Execute all deletions
+      await batch.commit();
+      console.log("✅ All user data deleted from Firestore");
+      
+      // 6. Delete the user account from Firebase Auth
+      console.log("🔐 Deleting user authentication...");
+      await deleteUser(user);
+      console.log("✅ User account deleted successfully");
+      
+      toast.success("Account deleted successfully. You will be redirected to the home page.");
+      
+      // Redirect to home page
+      setTimeout(() => {
+        navigate("/");
+      }, 2000);
+      
+    } catch (error) {
+      console.error("💥 Error deleting account:", error);
+      
+      if (error.code === 'auth/requires-recent-login') {
+        toast.error(
+          "For security reasons, you need to sign in again before deleting your account. " +
+          "Please sign out, sign back in, and try again."
+        );
+      } else {
+        toast.error(
+          "Failed to delete account. Please try again or contact support if the problem persists."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (loading && !user) { // Adjusted loading condition slightly for initial load before user is confirmed
     return (
       <Layout>
@@ -215,6 +343,25 @@ export default function Profile() {
             <Button onClick={updateProfile} disabled={loading} className="w-full">
               {loading ? "Saving..." : "Save Changes"}
             </Button>
+            
+            {/* Danger Zone - Delete Account */}
+            <div className="border-t pt-8 mt-8">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-red-800 mb-2">Danger Zone</h3>
+                <p className="text-sm text-red-700 mb-4">
+                  Once you delete your account, there is no going back. This action cannot be undone.
+                  All your books, messages, and profile data will be permanently removed.
+                </p>
+                <Button 
+                  onClick={deleteAccount} 
+                  disabled={loading}
+                  variant="destructive"
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {loading ? "Processing..." : "Delete Account"}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

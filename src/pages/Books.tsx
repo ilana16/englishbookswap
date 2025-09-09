@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { BookList } from "@/components/common/BookList";
 import { NeighborhoodFilter } from "@/components/common/NeighborhoodFilter";
@@ -13,6 +13,7 @@ import { db } from "@/integrations/firebase/config";
 import { Book } from "@/components/common/BookCard";
 import { COLLECTIONS } from "@/integrations/firebase/types";
 import { getBookById } from "@/services/googleBooks";
+import { getAllGenres } from "@/utils/googleBooksGenres";
 
 const Books = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -20,7 +21,9 @@ const Books = () => {
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>([]);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
-  const [availableGenres, setAvailableGenres] = useState<string[]>([]);
+  
+  // Use comprehensive Google Books API genres instead of just available genres from current books
+  const availableGenres = getAllGenres();
 
   const { data: allBooks = [], isLoading, error } = useQuery<Book[]>({
     queryKey: ["allBooks"], // Fetch all books once
@@ -41,15 +44,6 @@ const Books = () => {
           genres: data.genres || []
         };
       });
-      
-      // Extract all unique genres from books for the filter
-      const allGenres = new Set<string>();
-      booksData.forEach(book => {
-        if (book.genres && book.genres.length > 0) {
-          book.genres.forEach(genre => allGenres.add(genre));
-        }
-      });
-      setAvailableGenres(Array.from(allGenres).sort());
       
       return booksData;
     }
